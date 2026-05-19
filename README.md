@@ -11,3 +11,7 @@
 Для создания пустых образов нужной емкости использовать команды:
 qemu-img create -f qcow2 arm-abi.qcow2 16G
 qemu-img create -f qcow2 srv-szi.qcow2 32G
+
+TODO
+Сделать копирование iso образов в системный пул, либо временно в пул пользователя вместе с qcow2
+sudo -u "$USER" find . -type f \( -name "*.qcow2" -o -name "*.iso" \) -exec cp -u {} "$POOL_PATH" \;

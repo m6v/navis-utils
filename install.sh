@@ -7,16 +7,16 @@ usage() {
 Скрипт для автоматической настройки инфраструктуры KVM для УТК-СЗИ.
 
 Параметры:
-  -h, --help      Показать эту справку и выйти
-  -c, --connect URI     URI подключения к гипервизору (Hypervisor Connection URI).
-                        Определяет контекст драйвера и режим работы libvirt.
-                        Допустимые значения:
-                          qemu:///system   - Системный режим (System mode). Демон работает
-                                             с правами root, есть полный доступ к сети хоста.
-                          qemu:///session  - Пользовательский режим (Session mode). Ограничен
-                                             правами текущего пользователя в его сессии.
-                        (По умолчанию: qemu:///system)
-  -p, --pool POOL_NAME  Имя пула хранения (по умолчанию совпадает с именем пользователя).
+  -h, --help           Показать эту справку и выйти
+  -c, --connect URI    URI подключения к гипервизору (Hypervisor Connection URI).
+                       Определяет контекст драйвера и режим работы libvirt.
+                       Допустимые значения:
+                         qemu:///system   - Системный режим (System mode). Демон работает
+                                            с правами root, есть полный доступ к сети хоста.
+                         qemu:///session  - Пользовательский режим (Session mode). Ограничен
+                                            правами текущего пользователя в его сессии.
+                      (По умолчанию: qemu:///system)
+  -p, --pool POOL_NAME Имя пула хранения (по умолчанию совпадает с именем пользователя).
 
 Примеры запуска:
   $(basename "$0")
@@ -30,6 +30,9 @@ if [ "$EUID" -ne 0 ]; then
   exec sudo "$0" "$@"
 fi
 
+# Кроме astra-kvm есть пакет astra-kvm-secure, но работает и без него
+apt install -y astra-kvm
+
 # Использовать системный сеанс, т.к. в сессионном сеансе запуск ВМ в Astra Linux не работает
 URI="qemu:///system"
 
@@ -39,6 +42,8 @@ HOME=$(getent passwd "$USER" | cut -d: -f6)
 
 POOL_NAME="$USER"
 POOL_PATH="$HOME/.local/share/libvirt/images"
+
+SYS_QEMU_DIR="/etc/libvirt/qemu"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -74,7 +79,7 @@ done
 for net_name in intnet extnet; do
   virsh -c "$URI" net-info $net_name &> /dev/null
   if [ $? -ne 0 ]; then
-    echo "$0: Сеть $net_name не установлена, выполняем установку"
+    echo "Сеть $net_name не установлена, выполняем установку"
     # Установить и запустить сеть $net_name
     virsh -c "$URI" net-define <(echo "<network><name>${net_name}</name></network>")
     virsh net-start $net_name
@@ -106,15 +111,13 @@ sudo -u $USER virsh -c "$URI" pool-autostart "$POOL_NAME"
 sudo -u "$USER" find . -type f -name "*.qcow2" -exec cp -u {} "$POOL_PATH" \;
 sudo -u "$USER" virsh -c qemu:///system pool-refresh "$POOL_NAME"
 
-SYS_QEMU_DIR="/etc/libvirt/qemu"
-
 for filename in *.xml; do
   # На случай пустого каталога проверить, что файл существует
   [ -e "$filename" ] || continue
   vm_name="${filename%.xml}"
   # Проверить, существует ли машина $vm_name
   if sudo -u "$USER" virsh -c qemu:///system dominfo "$vm_name" >/dev/null 2>&1; then
-    echo "$0: Виртуальная машина '$vm_name' уже зарегистрирована в KVM. Пропускаем."
+    echo "Виртуальная машина '$vm_name' ранее зарегистрирована в KVM, пропускаем"
     continue
   fi
   cp "$vm_name".xml $SYS_QEMU_DIR
