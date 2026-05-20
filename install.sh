@@ -94,17 +94,15 @@ mkdir -p "$POOL_PATH"
 chown -R "$USER":libvirt "$HOME/.local" 2>/dev/null || chown -R "$USER":root "$HOME/.local"
 chmod 775 "$POOL_PATH"
 
-# Пересоздать пул KVM, если он существовал
-if virsh -c "$URI" pool-list --all | grep -q "$POOL_NAME"; then
-  virsh -c "$URI" pool-destroy "$POOL_NAME" 2>/dev/null
-  virsh -c "$URI" pool-undefine "$POOL_NAME" 2>/dev/null
+# Проверить наличие пула $POOL_NAME и создать, если отсутствовал
+virsh -c "$URI" pool-info "$POOL_NAME"
+if [ $? -ne 0 ]; then
+  # Зарегистрировать стандартный путь как пул KVM
+  # NB! Запуск с правами пользователя обязателен, иначе завершается с ошибкой!
+  sudo -u $USER virsh -c "$URI" pool-define-as "$POOL_NAME" --type dir --target "$POOL_PATH"
+  sudo -u $USER virsh -c "$URI" pool-start "$POOL_NAME"
+  sudo -u $USER virsh -c "$URI" pool-autostart "$POOL_NAME"
 fi
-
-# Зарегистрировать стандартный путь как пул KVM,
-# NB! Запуск с правами пользователя обязателен, иначе завершается с ошибкой!
-sudo -u $USER virsh -c "$URI" pool-define-as "$POOL_NAME" --type dir --target "$POOL_PATH"
-sudo -u $USER virsh -c "$URI" pool-start "$POOL_NAME"
-sudo -u $USER virsh -c "$URI" pool-autostart "$POOL_NAME"
 
 # Скопировать все образы в созданный пул и зарегистрировать их
 # NB! При копировании замещаются только более старые файлы (флаг -u)
@@ -112,16 +110,26 @@ sudo -u "$USER" find . -type f -name "*.qcow2" -exec cp -u {} "$POOL_PATH" \;
 sudo -u "$USER" virsh -c qemu:///system pool-refresh "$POOL_NAME"
 
 for filename in *.xml; do
-  # На случай пустого каталога проверить, что файл существует
+  # При отутсвтии в каталоге xml выйти из цикла
   [ -e "$filename" ] || continue
   vm_name="${filename%.xml}"
   # Проверить, существует ли машина $vm_name
   if sudo -u "$USER" virsh -c qemu:///system dominfo "$vm_name" >/dev/null 2>&1; then
-    echo "Виртуальная машина '$vm_name' ранее зарегистрирована в KVM, пропускаем"
+    echo "Domain '$vm_name' allready registered"
+    echo
     continue
   fi
   cp "$vm_name".xml $SYS_QEMU_DIR
-  sed -i -e "s|vm_name|$vm_name|g" -e "s|pool_name|$USER|g" "$SYS_QEMU_DIR"/"$filename"
+  # Заменить шаблоны имени машины и пула актуальными значениями
+  sed -i -e "s|{vm_name}|$vm_name|g" -e "s|{pool_name}|$USER|g" "$SYS_QEMU_DIR"/"$filename"
   # Зарегистрировать виртуальную машину в KVM
   sudo -u "$USER" virsh -c qemu:///system define "$SYS_QEMU_DIR"/"$filename"
 done
+
+# Создать iso-образ с содержимым каталога distros
+genisoimage -J -joliet-long -U -o distros.iso distros
+
+POOL_NAME="default"
+POOL_PATH="/var/lib/libvirt/images"
+# Скопировать все iso в системный пул
+find . -type f -name "*.iso" -exec cp -u {} "$POOL_PATH" \;

@@ -1,7 +1,7 @@
 <domain type='kvm'>
-  <name>vm_name</name>
+  <name>{vm_name}</name>
   <title>АРМ управления СКЗИ</title>
-  <description></description>
+  <description>АРМ управления АПКШ "Континент". Для входа использовать логин 'administrator' и пароль '11111111'</description>
   <memory unit='KiB'>4194304</memory>
   <currentMemory unit='KiB'>4194304</currentMemory>
   <vcpu placement='static'>2</vcpu>
@@ -30,7 +30,7 @@
 
     <disk type='volume' device='disk'>
       <driver name='qemu' type='qcow2' cache='writeback'/>
-      <source pool='pool_name' volume='vm_name.qcow2'/>
+      <source pool='{pool_name}' volume='{vm_name}.qcow2'/>
       <target dev='vda' bus='virtio'/>
     </disk>
 

@@ -38,6 +38,9 @@ main.spec
 # QEMU Copy-On-Write files
 *.qcow2
 
+# ISO files
+*.iso
+
 # Temporary files
 tmp/
 *.tmp

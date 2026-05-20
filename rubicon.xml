@@ -1,5 +1,5 @@
 <domain type='kvm'>
-  <name>rubicon</name>
+  <name>{vm_name}</name>
   <title>ПАК "Рубикон"</title>
   <description>Программно-аппаратный комплекс «Комплекс противодействия программно-аппаратным воздействиям (КП ПАВ) «Рубикон» с поддержкой виртуальных сетей. Для входа в консоль восстановления использовать логин и пароль 'rescue'</description>
   <memory unit='KiB'>1048576</memory>
@@ -30,7 +30,7 @@
 
     <disk type='volume' device='disk'>
       <driver name='qemu' type='qcow2' cache='writeback'/>
-      <source pool='pool_name' volume='vm_name.qcow2'/>
+      <source pool='{pool_name}' volume='{vm_name}.qcow2'/>
       <target dev='vda' bus='virtio'/>
     </disk>
 
