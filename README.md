@@ -15,3 +15,13 @@ qemu-img create -f qcow2 srv-szi.qcow2 32G
 TODO
 Сделать копирование iso образов в системный пул, либо временно в пул пользователя вместе с qcow2
 sudo -u "$USER" find . -type f \( -name "*.qcow2" -o -name "*.iso" \) -exec cp -u {} "$POOL_PATH" \;
+
+Если будет использоваться qemu-guest-agent, то добавить с конфиг ВМ канал:
+<channel type="unix">
+    <target type="virtio" name="org.qemu.guest_agent.0"/>
+    <address type="virtio-serial" controller="0" bus="0" port="1"/>
+</channel>
+на ВМ установить и включить службу qemu-guest-agent.
+После этих действий можно выполнять команды, например,
+virsh -c qemu:///system qemu-agent-command "$DOMAIN_NAME" '{"execute":"guest-get-time"}'
+но команды от root не запускаются, нужно разбираться как заставить
