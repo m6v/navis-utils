@@ -16,11 +16,12 @@ usage() {
                          qemu:///session  - Пользовательский режим (Session mode). Ограничен
                                             правами текущего пользователя в его сессии.
                       (По умолчанию: qemu:///system)
-  -p, --pool POOL_NAME Имя пула хранения (по умолчанию совпадает с именем пользователя).
+  -p, --pool POOL_NAME Имя пула хранения (по умолчанию совпадает с именем пользователя)
+  -u, --user USER_NAME Имя пользователя (по умолчанию текущий пользователь)
 
 Примеры запуска:
-  $(basename "$0")
-  $(basename "$0") --connect qemu:///session --pool my_pool
+  $(basename "$0") --user john
+  $(basename "$0") --user john --pool my_pool
 EOF
   exit 1
 }
@@ -73,12 +74,6 @@ URI="qemu:///system"
 
 # NB! При запуске из файлового менеджера может не работать!
 USER=$(logname)
-HOME=$(getent passwd "$USER" | cut -d: -f6)
-
-POOL_NAME="$USER"
-POOL_PATH="$HOME/.local/share/libvirt/images"
-
-SYS_QEMU_DIR="/etc/libvirt/qemu"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -102,6 +97,11 @@ while [ $# -gt 0 ]; do
       shift
       POOL_NAME="$1"
       ;;
+    -u|--user)
+      # Взять следующее значение в качестве имени пользователя и сдвинуть очередь
+      shift
+      USER="$1"
+      ;;
     *)
       echo "Ошибка: Неизвестный параметр: $1" >&2
       echo "Используйте -h или --help для справки." >&2
@@ -110,6 +110,18 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+if ! getent passwd "$USER" &>/dev/null; then
+  echo "Error: User '$USER' not exist"
+  exit 1
+fi
+
+HOME=$(getent passwd "$USER" | cut -d: -f6)
+
+POOL_NAME="$USER"
+POOL_PATH="$HOME/.local/share/libvirt/images"
+
+SYS_QEMU_DIR="/etc/libvirt/qemu"
 
 # Создать виртуальные сети
 for network_name in intnet extnet; do
@@ -160,7 +172,7 @@ for filename in *.xml; do
   fi
   cp $filename $SYS_QEMU_DIR
   # Заменить шаблоны имени машины и пула в xml-файле актуальными значениями
-  sed -i -e "s|{domain_name}|$domain_name|g" -e "s|{pool_name}|$USER|g" "$SYS_QEMU_DIR"/"$filename"
+  sed -i -e "s|{domain_name}|$domain_name|g" -e "s|{pool_name}|$POOL_NAME|g" "$SYS_QEMU_DIR"/"$filename"
   # Зарегистрировать виртуальную машину в KVM
   sudo -u "$USER" virsh -c qemu:///system define "$SYS_QEMU_DIR"/"$filename"
   create_shortcuts $filename
@@ -169,9 +181,9 @@ done
 # Создать iso-образ с содержимым каталога distros
 genisoimage -input-charset utf-8 -r -J -joliet-long -U -o distros.iso distros
 
-POOL_NAME="default"
-POOL_PATH="/var/lib/libvirt/images"
+SYS_POOL_NAME="default"
+SYS_POOL_PATH="/var/lib/libvirt/images"
 # Скопировать все iso в системный пул
-find . -type f -name "*.iso" -exec cp -u {} "$POOL_PATH" \;
+find . -type f -name "*.iso" -exec cp -u {} "$SYS_POOL_PATH" \;
 
 systemctl restart libvirtd
