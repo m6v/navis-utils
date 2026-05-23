@@ -25,6 +25,43 @@ EOF
   exit 1
 }
 
+create_icons () {
+  # Содать на рабочем столе иконку запуска виртуальной машины,
+  # имя xml-файла которой передается в первом аргументе
+  # Найти <title> строго в начале строки (с учетом отступов)
+  local domain
+  domain=$(basename "$1" .xml)
+
+  # Красивое имя ищем в <title> строго в начале строки
+  local vm_title
+  vm_title=$(grep -Po '^\s*<title>\K.*?(?=</title>)' "$1" | head -n 1)
+
+  # Если тега <title> в файле нет, используем системное имя домена
+  [[ -z "$vm_title" ]] && vm_title="$domain"
+
+  # Определяем путь к Рабочему столу (поддерживает и Xubuntu, и Astra Linux)
+  local desktop_dir
+  desktop_dir=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
+
+  local launcher_path="$desktop_dir/$vm_title.desktop"
+
+  # Создаем ярлык: Name — красивое имя с пробелами, Exec — точное имя домена
+  cat <<EOF > "$launcher_path"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=$vm_title
+Comment=Запуск виртуальной машины $vm_title
+Exec=sh -c "virsh --connect qemu:///system start '$domain'; virt-manager --connect qemu:///system --show-domain-console '$domain'"
+Icon=virt-manager
+Terminal=false
+Categories=System;Emulator;
+EOF
+
+  chmod +x "$launcher_path"
+  echo "Icon '$domain.desktop' created"
+}
+
 if [ "$EUID" -ne 0 ]; then
   # Перезапустить скрипт ($0) со всеми переданными ему аргумитами ($@) через sudo
   exec sudo "$0" "$@"
@@ -51,7 +88,8 @@ while [ $# -gt 0 ]; do
       usage
       ;;
     -с|--connect)
-      # Взять следующее значение в качестве URI подключения к гипервизору и сдвинуть очередь
+      # Взять в качестве URI подключения к гипервизору
+      # следующее значение и сдвинуть очередь
       shift
       if [[ "$1" == "qemu:///system" || "$1" == "qemu:///session" ]]; then
         URI="$1"
@@ -87,14 +125,19 @@ for net_name in intnet extnet; do
   fi
 done
 
-# Обеспечить права доступа libvirt к домашней папке
-chmod o+x $HOME
-# Создать всю цепочку стандартных директорий и выставить права
-mkdir -p "$POOL_PATH"
-chown -R "$USER":libvirt "$HOME/.local" 2>/dev/null || chown -R "$USER":root "$HOME/.local"
-chmod 775 "$POOL_PATH"
+# Создать каталог пула и изменить группу
+sudo -u $USER mkdir -p "$POOL_PATH"
+chown "$USER":libvirt "$POOL_PATH"
+# Установить SGID-бит (2), чтобы новые файлы внутри пула автоматически получали группу kvm
+chmod 2755 "$POOL_PATH"
 
-# Проверить наличие пула $POOL_NAME и создать, если отсутствовал
+# Скопировать все образы в созданный пул:
+# скобки для запуска в изолированной оболочке (subshell),
+# umask 007 задает создаваемым файлам права 660,
+# параметр -u замена только более старых файлов
+(umask 007 && sudo -u "$USER" find . -type f -name "*.qcow2" -exec cp -u --no-preserve=mode {} "$POOL_PATH" \;)
+
+# Проверить наличие пула $POOL_NAME и создать, если он отсутствовал
 virsh -c "$URI" pool-info "$POOL_NAME"
 if [ $? -ne 0 ]; then
   # Зарегистрировать стандартный путь как пул KVM
@@ -103,15 +146,13 @@ if [ $? -ne 0 ]; then
   sudo -u $USER virsh -c "$URI" pool-start "$POOL_NAME"
   sudo -u $USER virsh -c "$URI" pool-autostart "$POOL_NAME"
 fi
-
-# Скопировать все образы в созданный пул и зарегистрировать их
-# NB! При копировании замещаются только более старые файлы (флаг -u)
-sudo -u "$USER" find . -type f -name "*.qcow2" -exec cp -u {} "$POOL_PATH" \;
+# Зарегистрировать скопированные образы
 sudo -u "$USER" virsh -c qemu:///system pool-refresh "$POOL_NAME"
 
 for filename in *.xml; do
   # При отутсвтии в каталоге xml выйти из цикла
   [ -e "$filename" ] || continue
+  # В качестве имени машины использовать имя файла (без расширения)
   vm_name="${filename%.xml}"
   # Проверить, существует ли машина $vm_name
   if sudo -u "$USER" virsh -c qemu:///system dominfo "$vm_name" >/dev/null 2>&1; then
@@ -119,17 +160,20 @@ for filename in *.xml; do
     echo
     continue
   fi
-  cp "$vm_name".xml $SYS_QEMU_DIR
+  cp $filename $SYS_QEMU_DIR
   # Заменить шаблоны имени машины и пула актуальными значениями
   sed -i -e "s|{vm_name}|$vm_name|g" -e "s|{pool_name}|$USER|g" "$SYS_QEMU_DIR"/"$filename"
   # Зарегистрировать виртуальную машину в KVM
   sudo -u "$USER" virsh -c qemu:///system define "$SYS_QEMU_DIR"/"$filename"
+  create_icons $filename
 done
 
 # Создать iso-образ с содержимым каталога distros
-genisoimage -J -joliet-long -U -o distros.iso distros
+genisoimage -input-charset utf-8 -r -J -joliet-long -U -o distros.iso distros
 
 POOL_NAME="default"
 POOL_PATH="/var/lib/libvirt/images"
 # Скопировать все iso в системный пул
 find . -type f -name "*.iso" -exec cp -u {} "$POOL_PATH" \;
+
+systemctl restart libvirtd
