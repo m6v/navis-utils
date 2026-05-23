@@ -25,41 +25,39 @@ EOF
   exit 1
 }
 
-create_icons () {
-  # Содать на рабочем столе иконку запуска виртуальной машины,
-  # имя xml-файла которой передается в первом аргументе
-  # Найти <title> строго в начале строки (с учетом отступов)
-  local domain
-  domain=$(basename "$1" .xml)
+# Содать на рабочем столе ярлык запуска виртуальной машины,
+# имя xml-файла которой передается в первом аргументе
+create_shortcuts () {
+  local domain_name
+  domain_name=$(basename "$1" .xml)
 
-  # Красивое имя ищем в <title> строго в начале строки
-  local vm_title
-  vm_title=$(grep -Po '^\s*<title>\K.*?(?=</title>)' "$1" | head -n 1)
+  # Имя ярлыка виртуальной машины взять из тега <title>
+  local domain_title
+  domain_title=$(grep -Po '^\s*<title>\K.*?(?=</title>)' "$1" | head -n 1)
 
-  # Если тега <title> в файле нет, используем системное имя домена
-  [[ -z "$vm_title" ]] && vm_title="$domain"
+  # Если тега <title> в файле нет, использовать имя домена
+  [[ -z "$domain_title" ]] && domain_title="$domain_name"
 
-  # Определяем путь к Рабочему столу (поддерживает и Xubuntu, и Astra Linux)
-  local desktop_dir
-  desktop_dir=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
+  # Определить путь к каталогк рабочего стола
+  local desktop
+  desktop=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
 
-  local launcher_path="$desktop_dir/$vm_title.desktop"
+  local shortcut="$desktop/$domain_title.desktop"
 
-  # Создаем ярлык: Name — красивое имя с пробелами, Exec — точное имя домена
-  cat <<EOF > "$launcher_path"
+  cat <<EOF > "$shortcut"
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=$vm_title
-Comment=Запуск виртуальной машины $vm_title
-Exec=sh -c "virsh --connect qemu:///system start '$domain'; virt-manager --connect qemu:///system --show-domain-console '$domain'"
+Name=$domain_title
+Comment=Запуск виртуальной машины $domain_title
+Exec=sh -c "virsh --connect qemu:///system start '$domain_name'; virt-manager --connect qemu:///system --show-domain-console '$domain_name'"
 Icon=virt-manager
 Terminal=false
 Categories=System;Emulator;
 EOF
 
-  chmod +x "$launcher_path"
-  echo "Icon '$domain.desktop' created"
+  chmod +x "$shortcut"
+  echo "$domain_name icon created"
 }
 
 if [ "$EUID" -ne 0 ]; then
@@ -68,7 +66,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Кроме astra-kvm есть пакет astra-kvm-secure, но работает и без него
-apt install -y astra-kvm
+# apt install -y astra-kvm
 
 # Использовать системный сеанс, т.к. в сессионном сеансе запуск ВМ в Astra Linux не работает
 URI="qemu:///system"
@@ -114,14 +112,14 @@ while [ $# -gt 0 ]; do
 done
 
 # Создать виртуальные сети
-for net_name in intnet extnet; do
-  virsh -c "$URI" net-info $net_name &> /dev/null
+for network_name in intnet extnet; do
+  virsh -c "$URI" net-info $network_name &> /dev/null
   if [ $? -ne 0 ]; then
-    echo "Сеть $net_name не установлена, выполняем установку"
-    # Установить и запустить сеть $net_name
-    virsh -c "$URI" net-define <(echo "<network><name>${net_name}</name></network>")
-    virsh net-start $net_name
-    virsh net-autostart $net_name
+    echo "Сеть $network_name не установлена, выполняем установку"
+    # Установить и запустить сеть $network_name
+    virsh -c "$URI" net-define <(echo "<network><name>${network_name}</name></network>")
+    virsh net-start $network_name
+    virsh net-autostart $network_name
   fi
 done
 
@@ -152,20 +150,20 @@ sudo -u "$USER" virsh -c qemu:///system pool-refresh "$POOL_NAME"
 for filename in *.xml; do
   # При отутсвтии в каталоге xml выйти из цикла
   [ -e "$filename" ] || continue
-  # В качестве имени машины использовать имя файла (без расширения)
-  vm_name="${filename%.xml}"
-  # Проверить, существует ли машина $vm_name
-  if sudo -u "$USER" virsh -c qemu:///system dominfo "$vm_name" >/dev/null 2>&1; then
-    echo "Domain '$vm_name' allready registered"
+  # В качестве имени машины использовать имя xml-файла (без расширения)
+  domain_name="${filename%.xml}"
+  # Если машина $domain_name уже существует, пропустить итерацию цикла
+  if sudo -u "$USER" virsh -c qemu:///system dominfo "$domain_name" >/dev/null 2>&1; then
+    echo "Domain $domain_name allready registered"
     echo
     continue
   fi
   cp $filename $SYS_QEMU_DIR
-  # Заменить шаблоны имени машины и пула актуальными значениями
-  sed -i -e "s|{vm_name}|$vm_name|g" -e "s|{pool_name}|$USER|g" "$SYS_QEMU_DIR"/"$filename"
+  # Заменить шаблоны имени машины и пула в xml-файле актуальными значениями
+  sed -i -e "s|{domain_name}|$domain_name|g" -e "s|{pool_name}|$USER|g" "$SYS_QEMU_DIR"/"$filename"
   # Зарегистрировать виртуальную машину в KVM
   sudo -u "$USER" virsh -c qemu:///system define "$SYS_QEMU_DIR"/"$filename"
-  create_icons $filename
+  create_shortcuts $filename
 done
 
 # Создать iso-образ с содержимым каталога distros
