@@ -15,7 +15,7 @@ usage() {
                                             с правами root, есть полный доступ к сети хоста.
                          qemu:///session  - Пользовательский режим (Session mode). Ограничен
                                             правами текущего пользователя в его сессии.
-                      (По умолчанию: qemu:///system)
+                       (по умолчанию qemu:///system)
   -p, --pool POOL_NAME Имя пула хранения (по умолчанию совпадает с именем пользователя)
   -u, --user USER_NAME Имя пользователя (по умолчанию текущий пользователь)
 
@@ -58,7 +58,7 @@ Categories=System;Emulator;
 EOF
 
   chmod +x "$shortcut"
-  echo "$domain_name icon created"
+  echo "Info: Icon for $domain_name created"
 }
 
 if [ "$EUID" -ne 0 ]; then
@@ -175,11 +175,12 @@ for filename in *.xml; do
   sed -i -e "s|{domain_name}|$domain_name|g" -e "s|{pool_name}|$POOL_NAME|g" "$SYS_QEMU_DIR"/"$filename"
   # Зарегистрировать виртуальную машину в KVM
   sudo -u "$USER" virsh -c qemu:///system define "$SYS_QEMU_DIR"/"$filename"
+  [[ -f "$domain_name.qcow2" ]] || echo "Warning: Image $domain_name.qcow2 don't exist"
   create_shortcuts $filename
 done
 
 # Создать iso-образ с содержимым каталога distros
-genisoimage -input-charset utf-8 -r -J -joliet-long -U -o distros.iso distros
+genisoimage -input-charset utf-8 -r -J -joliet-long -U -o distros.iso distros &>/dev/null
 
 SYS_POOL_NAME="default"
 SYS_POOL_PATH="/var/lib/libvirt/images"
