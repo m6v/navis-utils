@@ -165,4 +165,7 @@ SYS_POOL_PATH="/var/lib/libvirt/images"
 # Скопировать все iso в системный пул
 find . -type f -name "*.iso" -exec cp -u {} "$SYS_POOL_PATH" \;
 
+# Скопировать иконки к каталог темы оформления
+cp icons/*.png /usr/share/icons/hicolor/48x48/apps
+
 # systemctl restart libvirtd
