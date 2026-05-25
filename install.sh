@@ -16,7 +16,6 @@ usage() {
                          qemu:///session  - Пользовательский режим (Session mode). Ограничен
                                             правами текущего пользователя в его сессии.
                        (по умолчанию qemu:///system)
-  -p, --pool POOL_NAME Имя пула хранения (по умолчанию совпадает с именем пользователя)
   -u, --user USER_NAME Имя пользователя (по умолчанию текущий пользователь)
 
 Примеры запуска:
@@ -57,11 +56,6 @@ while [ $# -gt 0 ]; do
         exit 1
       fi
       ;;
-    -p|--pool)
-      # Взять следующее значение в качестве имени пула и сдвинуть очередь
-      shift
-      POOL_NAME="$1"
-      ;;
     -u|--user)
       # Взять следующее значение в качестве имени пользователя и сдвинуть очередь
       shift
@@ -86,8 +80,8 @@ HOME=$(getent passwd "$USER" | cut -d: -f6)
 # Определить путь к каталогу рабочего стола
 DESKTOP=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
 # Имя пула всегда соответствует имени пользователя
-POOL_NAME="$USER"
-POOL_PATH="$HOME/.local/share/libvirt/images"
+export pool_name="$USER"
+export pool_path="$HOME/.local/share/libvirt/images"
 
 SYS_QEMU_DIR="/etc/libvirt/qemu"
 
@@ -115,17 +109,17 @@ chmod 2755 "$POOL_PATH"
 # параметр -u замена только более старых файлов
 (umask 007 && sudo -u "$USER" find . -type f -name "*.qcow2" -exec cp -u --no-preserve=mode {} "$POOL_PATH" \;)
 
-# Проверить наличие пула $POOL_NAME и создать, если он отсутствовал
-virsh -c "$URI" pool-info "$POOL_NAME"
+# Проверить наличие пула pool_name и создать, если он отсутствовал
+virsh -c "$URI" pool-info "$pool_name"
 if [ $? -ne 0 ]; then
   # Зарегистрировать стандартный путь как пул KVM
   # NB! Запуск с правами пользователя обязателен, иначе завершается с ошибкой!
-  sudo -u $USER virsh -c "$URI" pool-define-as "$POOL_NAME" --type dir --target "$POOL_PATH"
-  sudo -u $USER virsh -c "$URI" pool-start "$POOL_NAME"
-  sudo -u $USER virsh -c "$URI" pool-autostart "$POOL_NAME"
+  sudo -u $USER virsh -c "$URI" pool-define-as "$pool_name" --type dir --target "$POOL_PATH"
+  sudo -u $USER virsh -c "$URI" pool-start "$pool_name"
+  sudo -u $USER virsh -c "$URI" pool-autostart "$pool_name"
 fi
 # Зарегистрировать скопированные образы
-sudo -u "$USER" virsh -c qemu:///system pool-refresh "$POOL_NAME"
+sudo -u "$USER" virsh -c qemu:///system pool-refresh "$pool_name"
 
 for filename in *.xml; do
   # При отутсвтии в каталоге xml выйти из единственной итерации цикла
@@ -142,8 +136,8 @@ for filename in *.xml; do
 
   # Скопировать конфиг в каталог системного сеанса
   cp $filename $SYS_QEMU_DIR
-  # Заменить шаблоны имени машины и пула в xml-файле актуальными значениями
-  sed -i -e "s|{domain_name}|$domain_name|g" -e "s|{pool_name}|$POOL_NAME|g" "$SYS_QEMU_DIR"/"$filename"
+  # Заменить шаблон пула в xml-файле значением pool_name и скопировать файл в каталог системной сессии
+  envsubst < "$filename" > "$SYS_QEMU_DIR"/"$filename"
   # Зарегистрировать виртуальную машину в KVM
   sudo -u "$USER" virsh -c qemu:///system define "$SYS_QEMU_DIR"/"$filename"
   [[ -f "$domain_name.qcow2" ]] || echo "Warning: Image $domain_name.qcow2 don't exist"
