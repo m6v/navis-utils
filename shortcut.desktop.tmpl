@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=$domain_title
+Comment=Запуск виртуальной машины $domain_title
+Exec=sh -c "virsh --connect qemu:///system start $domain_name; virt-manager --connect qemu:///system --show-domain-console $domain_name"
+Icon=virt-manager
+Terminal=false
+Categories=System;Emulator;

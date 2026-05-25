@@ -26,41 +26,6 @@ EOF
   exit 1
 }
 
-# Содать на рабочем столе ярлык запуска виртуальной машины,
-# имя xml-файла которой передается в первом аргументе
-create_shortcuts () {
-  local domain_name
-  domain_name=$(basename "$1" .xml)
-
-  # Имя ярлыка виртуальной машины взять из тега <title>
-  local domain_title
-  domain_title=$(grep -Po '^\s*<title>\K.*?(?=</title>)' "$1" | head -n 1)
-
-  # Если тега <title> в файле нет, использовать имя домена
-  [[ -z "$domain_title" ]] && domain_title="$domain_name"
-
-  # Определить путь к каталогк рабочего стола
-  local desktop
-  desktop=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
-
-  local shortcut="$desktop/$domain_title.desktop"
-
-  cat <<EOF > "$shortcut"
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=$domain_title
-Comment=Запуск виртуальной машины $domain_title
-Exec=sh -c "virsh --connect qemu:///system start '$domain_name'; virt-manager --connect qemu:///system --show-domain-console '$domain_name'"
-Icon=virt-manager
-Terminal=false
-Categories=System;Emulator;
-EOF
-
-  chmod +x "$shortcut"
-  echo "Info: Icon for $domain_name created"
-}
-
 if [ "$EUID" -ne 0 ]; then
   # Перезапустить скрипт ($0) со всеми переданными ему аргумитами ($@) через sudo
   exec sudo "$0" "$@"
@@ -116,8 +81,11 @@ if ! getent passwd "$USER" &>/dev/null; then
   exit 1
 fi
 
+# Определить путь к домашнему каталогу пользователя USER
 HOME=$(getent passwd "$USER" | cut -d: -f6)
-
+# Определить путь к каталогу рабочего стола
+DESKTOP=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
+# Имя пула всегда соответствует имени пользователя
 POOL_NAME="$USER"
 POOL_PATH="$HOME/.local/share/libvirt/images"
 
@@ -160,23 +128,33 @@ fi
 sudo -u "$USER" virsh -c qemu:///system pool-refresh "$POOL_NAME"
 
 for filename in *.xml; do
-  # При отутсвтии в каталоге xml выйти из цикла
+  # При отутсвтии в каталоге xml выйти из единственной итерации цикла
   [ -e "$filename" ] || continue
-  # В качестве имени машины использовать имя xml-файла (без расширения)
-  domain_name="${filename%.xml}"
+
+  # В качестве имени машины использовать имя xml-файла (без расширения),
+  # экспорт для корректной работы envsubst
+  export domain_name="${filename%.xml}"
   # Если машина $domain_name уже существует, пропустить итерацию цикла
   if sudo -u "$USER" virsh -c qemu:///system dominfo "$domain_name" >/dev/null 2>&1; then
-    echo "Domain $domain_name allready registered"
-    echo
+    echo "Domain $domain_name allready registered"; echo
     continue
   fi
+
+  # Скопировать конфиг в каталог системного сеанса
   cp $filename $SYS_QEMU_DIR
   # Заменить шаблоны имени машины и пула в xml-файле актуальными значениями
   sed -i -e "s|{domain_name}|$domain_name|g" -e "s|{pool_name}|$POOL_NAME|g" "$SYS_QEMU_DIR"/"$filename"
   # Зарегистрировать виртуальную машину в KVM
   sudo -u "$USER" virsh -c qemu:///system define "$SYS_QEMU_DIR"/"$filename"
   [[ -f "$domain_name.qcow2" ]] || echo "Warning: Image $domain_name.qcow2 don't exist"
-  create_shortcuts $filename
+
+  # Получить заголовок виртуальной машины из тега <title>
+  export domain_title=$(grep -Po '^\s*<title>\K.*?(?=</title>)' $filename | head -n 1)
+  # Если тега <title> в файле нет, использовать имя домена
+  [[ -z "$domain_title" ]] && export domain_title="$domain_name"
+  # Используется tee, чтобы создаваемый файл приналежал $USER (через перенаправление не работает)
+  envsubst < shortcut.desktop.tmpl | sudo -u "$USER" tee "$DESKTOP/$domain_title.desktop" > /dev/null
+  echo "Info: Shortcut for $domain_name created"; echo
 done
 
 # Создать iso-образ с содержимым каталога distros
@@ -187,4 +165,4 @@ SYS_POOL_PATH="/var/lib/libvirt/images"
 # Скопировать все iso в системный пул
 find . -type f -name "*.iso" -exec cp -u {} "$SYS_POOL_PATH" \;
 
-systemctl restart libvirtd
+# systemctl restart libvirtd

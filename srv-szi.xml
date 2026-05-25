@@ -1,5 +1,5 @@
 <domain type='kvm'>
-  <name>{domain_name}</name>
+  <name>srv-szi</name>
   <title>Сервер СЗИ</title>
   <description></description>
   <memory unit='KiB'>4194304</memory>
@@ -30,7 +30,7 @@
 
     <disk type='volume' device='disk'>
       <driver name='qemu' type='qcow2' cache='writeback'/>
-      <source pool='{pool_name}' volume='{domain_name}.qcow2'/>
+      <source pool='{pool_name}' volume='srv-szi.qcow2'/>
       <target dev='vda' bus='virtio'/>
     </disk>
 
