@@ -19,22 +19,20 @@ EOF
   exit 1
 }
 
+# Сделать каталог в котором находится скрипт текущим
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
 if [ "$EUID" -ne 0 ]; then
   # Перезапустить скрипт ($0) со всеми переданными ему аргумитами ($@) через sudo
   exec sudo "$0" "$@"
 fi
 
-# Кроме astra-kvm есть пакет astra-kvm-secure, но работает и без него
-# apt install -y astra-kvm
-
 # Использовать системный сеанс, т.к. в сессионном сеансе запуск ВМ в Astra Linux не работает
 URI="qemu:///system"
 
-# NB! При запуске из файлового менеджера может не работать!
-USER=$(logname)
-
-# Запрошенное действие (создание или удаление виртуальных машин)
-action=""
+USER=""
+# Если хотим применять для текущего пользователя, то раскомментировать
+# USER=$(logname)
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -61,14 +59,10 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-if [ -z $action ]; then
+# Запрошенное действие (создание или удаление виртуальных машин)
+if [ -z "$action" ]; then
   echo "Ошибка: Не задано действие"
   exit 2
-fi
-
-if ! getent passwd "$USER" &>/dev/null; then
-  echo "Ошибка: Пользователь '$USER' не существует"
-  exit 1
 fi
 
 SYS_QEMU_DIR="/etc/libvirt/qemu"
@@ -87,14 +81,31 @@ for network_name in intnet extnet; do
   fi
 done
 
-# Создать iso-образ с содержимым каталога distros
+# Создать iso-образ с содержимым каталога distros в подкаталоге images
 genisoimage -input-charset utf-8 -r -J -joliet-long -U -o images/distros.iso distros &>/dev/null
+# Скопировать все iso из подкаталога images в системный пул
+find images -type f -name "*.iso" -exec cp -u {} "$SYS_POOL_PATH" \;
 
-# Скопировать все iso в системный пул
-find . -type f -name "*.iso" -exec cp -u {} "$SYS_POOL_PATH" \;
+# Скопировать базовые образы дисков в системный пул и создать их оверлейные образы в текущем каталоге
+for filename in images/*.qcow2; do
+  cp -u $filename $SYS_POOL_PATH
+  echo -n "Info: "
+  qemu-img create -f qcow2 -F qcow2 -b $SYS_POOL_PATH/$(basename $filename) $(basename $filename)
+done
 
 # Скопировать иконки к каталог темы оформления
 cp icons/*.png /usr/share/icons/hicolor/48x48/apps
+
+if [ -z "$USER" ]; then
+  # Если пользователь не задан, завершить работу
+  echo "Warning: User not defined, skipping user settings on exit"
+  exit 0
+fi
+
+if ! getent passwd "$USER" &>/dev/null; then
+  echo "Error: No user '$USER' exist"
+  exit 1
+fi
 
 # Определить путь к домашнему каталогу пользователя USER
 HOME=$(getent passwd "$USER" | cut -d: -f6)
@@ -110,23 +121,24 @@ chown "$USER":libvirt "$pool_path"
 # Установить SGID-бит (2), чтобы новые файлы внутри пула автоматически получали группу kvm
 chmod 2755 "$pool_path"
 
-# Скопировать все образы в созданный пул:
+# Скопировать qcow2 образы из текущего каталога в созданный пул пользователя
 # скобки для запуска в изолированной оболочке (subshell),
-# umask 007 задает создаваемым файлам права 660,
+# umask 007 маскирует (сбрасывает) права остальных пользователей копируемых файлов
 # параметр -u замена только более старых файлов
 (umask 007 && sudo -u "$USER" find . -type f -name "*.qcow2" -exec cp -u --no-preserve=mode {} "$pool_path" \;)
 
 # Проверить наличие пула pool_name и создать, если он отсутствовал
 virsh -c "$URI" pool-info "$pool_name"
 if [ $? -ne 0 ]; then
-  # Зарегистрировать стандартный путь как пул KVM
+  # Зарегистрировать стандартный путь как пул KVM, | grep . для подавления вывода пустых строк
   # NB! Запуск с правами пользователя обязателен, иначе завершается с ошибкой!
-  sudo -u $USER virsh -c "$URI" pool-define-as "$pool_name" --type dir --target "$pool_path"
-  sudo -u $USER virsh -c "$URI" pool-start "$pool_name"
-  sudo -u $USER virsh -c "$URI" pool-autostart "$pool_name"
+  sudo -u $USER virsh -c "$URI" pool-define-as "$pool_name" --type dir --target "$pool_path" | grep .
+  sudo -u $USER virsh -c "$URI" pool-start "$pool_name" | grep .
+  sudo -u $USER virsh -c "$URI" pool-autostart "$pool_name" | grep .
 fi
 # Зарегистрировать скопированные образы
-sudo -u "$USER" virsh -c qemu:///system pool-refresh "$pool_name"
+echo -n "Info: "
+sudo -u "$USER" virsh -c qemu:///system pool-refresh "$pool_name" | grep .
 
 for filename in *.xml; do
   # При отутсвтии в каталоге xml выйти из единственной итерации цикла
@@ -137,7 +149,7 @@ for filename in *.xml; do
   export domain_name="${filename%.xml}"
   # Если машина $domain_name уже существует, пропустить итерацию цикла
   if sudo -u "$USER" virsh -c qemu:///system dominfo "$domain_name" >/dev/null 2>&1; then
-    echo "Warning: Domain $domain_name allready registered"; echo
+    echo "Warning: Domain $domain_name allready registered"
     continue
   fi
 
@@ -155,7 +167,7 @@ for filename in *.xml; do
   [[ -z "$domain_title" ]] && export domain_title="$domain_name"
   # Используется tee, чтобы создаваемый файл приналежал $USER (через перенаправление не работает)
   envsubst < shortcut.desktop.tmpl | sudo -u "$USER" tee "$DESKTOP/$domain_title.desktop" > /dev/null
-  echo "Info: Shortcut for $domain_name created"; echo
+  echo "Info: Shortcut for $domain_name created"
 done
 
 # systemctl restart libvirtd
