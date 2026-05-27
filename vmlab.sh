@@ -7,10 +7,10 @@ usage() {
 Скрипт для автоматической настройки инфраструктуры KVM для УТК-СЗИ.
 
 Параметры:
-  -h, --help           Показать эту справку и выйти
-  -u, --user USER_NAME Имя пользователя (по умолчанию текущий пользователь)
-  -c, --create         Создать пул и виртуальные машины пользователя
-  -d, --delete         Удалить пул и виртуальные машины пользователя
+  -h, --help              Показать эту справку и выйти
+  -u, --user ПОЛЬЗОВАТЕЛЬ Имя пользователя
+  -c, --create            Создать пул и виртуальные машины пользователя
+  -d, --delete            Удалить пул и виртуальные машины пользователя
 
 Примеры запуска:
   $(basename "$0") --create
@@ -23,7 +23,7 @@ EOF
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 if [ "$EUID" -ne 0 ]; then
-  # Перезапустить скрипт ($0) со всеми переданными ему аргумитами ($@) через sudo
+  # Перезапустить скрипт $0 со всеми переданными ему аргумитами $@ через sudo
   exec sudo "$0" "$@"
 fi
 
@@ -83,21 +83,19 @@ done
 
 # Создать iso-образ с содержимым каталога distros в подкаталоге images
 genisoimage -input-charset utf-8 -r -J -joliet-long -U -o images/distros.iso distros &>/dev/null
-# Скопировать все iso из подкаталога images в системный пул
-find images -type f -name "*.iso" -exec cp -u {} "$SYS_POOL_PATH" \;
-
-# Скопировать базовые образы дисков в системный пул и создать их оверлейные образы в текущем каталоге
-for filename in images/*.qcow2; do
-  cp -u $filename $SYS_POOL_PATH
-  echo -n "Info: "
-  qemu-img create -f qcow2 -F qcow2 -b $SYS_POOL_PATH/$(basename $filename) $(basename $filename)
-done
+# Скопировать базовые образы в системный пул, используя rsync, если установлен, или cp
+if [ -f "/usr/bin/rsync" ]; then
+  rsync -ahu --progress images/* "$SYS_POOL_PATH"
+else
+  cp -u images/* "$SYS_POOL_PATH"
+fi
+exit 0
 
 # Скопировать иконки к каталог темы оформления
-cp icons/*.png /usr/share/icons/hicolor/48x48/apps
+cp -u icons/*.png /usr/share/icons/hicolor/48x48/apps
 
+# Если пользователь не задан, завершить работу
 if [ -z "$USER" ]; then
-  # Если пользователь не задан, завершить работу
   echo "Warning: User not defined, skipping user settings on exit"
   exit 0
 fi
@@ -107,7 +105,7 @@ if ! getent passwd "$USER" &>/dev/null; then
   exit 1
 fi
 
-# Определить путь к домашнему каталогу пользователя USER
+# Определить путь к домашнему каталогу пользователя
 HOME=$(getent passwd "$USER" | cut -d: -f6)
 # Определить путь к каталогу рабочего стола
 DESKTOP=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
@@ -115,19 +113,19 @@ DESKTOP=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
 export pool_name="$USER"
 export pool_path="$HOME/.local/share/libvirt/images"
 
-# Создать каталог пула и изменить группу
+# Создать каталог пользовательского пула и изменить группу владельца
 sudo -u $USER mkdir -p "$pool_path"
 chown "$USER":libvirt "$pool_path"
-# Установить SGID-бит (2), чтобы новые файлы внутри пула автоматически получали группу kvm
+# Установить SGID-бит (2), чтобы новые файлы внутри пула автоматически получали группу libvirt
 chmod 2755 "$pool_path"
 
-# Скопировать qcow2 образы из текущего каталога в созданный пул пользователя
-# скобки для запуска в изолированной оболочке (subshell),
-# umask 007 маскирует (сбрасывает) права остальных пользователей копируемых файлов
-# параметр -u замена только более старых файлов
-(umask 007 && sudo -u "$USER" find . -type f -name "*.qcow2" -exec cp -u --no-preserve=mode {} "$pool_path" \;)
+# Создать оверлейные образы в каталоге пользовательского пула
+for filename in $SYS_POOL_PATH/*.qcow2; do
+  echo -n "Info: "
+  sudo -u $USER qemu-img create -f qcow2 -F qcow2 -b $filename $pool_path/$(basename $filename)
+done
 
-# Проверить наличие пула pool_name и создать, если он отсутствовал
+# Проверить наличие пула pool_name и зарегистрировать, если он отсутствовал
 virsh -c "$URI" pool-info "$pool_name"
 if [ $? -ne 0 ]; then
   # Зарегистрировать стандартный путь как пул KVM, | grep . для подавления вывода пустых строк
@@ -138,28 +136,26 @@ if [ $? -ne 0 ]; then
 fi
 # Зарегистрировать скопированные образы
 echo -n "Info: "
-sudo -u "$USER" virsh -c qemu:///system pool-refresh "$pool_name" | grep .
+sudo -u "$USER" virsh -c "$URI" pool-refresh "$pool_name" | grep .
 
 for filename in *.xml; do
-  # При отутсвтии в каталоге xml выйти из единственной итерации цикла
+  # При отутствии в каталоге xml выйти из единственной итерации цикла
   [ -e "$filename" ] || continue
 
-  # В качестве имени машины использовать имя xml-файла (без расширения),
-  # экспорт для корректной работы envsubst
-  export domain_name="${filename%.xml}"
+  # В качестве имени машины использовать имя xml-файла (без расширения) с суффиксом имени пользователя,
+  # экспорт для обработки с помощью envsubst
+  export domain_name="${filename%.xml}-$USER"
   # Если машина $domain_name уже существует, пропустить итерацию цикла
-  if sudo -u "$USER" virsh -c qemu:///system dominfo "$domain_name" >/dev/null 2>&1; then
+  if sudo -u "$USER" virsh -c "$URI" dominfo "$domain_name" >/dev/null 2>&1; then
     echo "Warning: Domain $domain_name allready registered"
     continue
   fi
 
-  # Скопировать конфиг в каталог системного сеанса
-  cp $filename $SYS_QEMU_DIR
-  # Заменить шаблон пула в xml-файле значением pool_name и скопировать файл в каталог системной сессии
+  # Заменить в шаблоне xml-файла domain_name и pool_name, скопировать файл в каталог системной сессии
   envsubst < "$filename" > "$SYS_QEMU_DIR"/"$filename"
   # Зарегистрировать виртуальную машину в KVM
-  sudo -u "$USER" virsh -c qemu:///system define "$SYS_QEMU_DIR"/"$filename"
-  [[ -f "$domain_name.qcow2" ]] || echo "Warning: Image $domain_name.qcow2 don't exist"
+  sudo -u "$USER" virsh -c "$URI" define "$SYS_QEMU_DIR"/"$filename"
+  [[ -f "$pool_path/${filename%.xml}.qcow2" ]] || echo "Warning: Image $pool_path/${filename%.xml}.qcow2 don't exist"
 
   # Получить заголовок виртуальной машины из тега <title>
   export domain_title=$(grep -Po '^\s*<title>\K.*?(?=</title>)' $filename | head -n 1)
@@ -170,4 +166,5 @@ for filename in *.xml; do
   echo "Info: Shortcut for $domain_name created"
 done
 
+# Обычно работает без перезапуска, но иногда зависает
 # systemctl restart libvirtd
