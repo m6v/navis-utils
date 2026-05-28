@@ -59,17 +59,35 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+SYS_QEMU_DIR="/etc/libvirt/qemu"
+SYS_POOL_NAME="default"
+SYS_POOL_PATH="/var/lib/libvirt/images"
+
 # Запрошенное действие (создание или удаление виртуальных машин)
 if [ -z "$action" ]; then
   echo "Ошибка: Не задано действие"
   exit 2
 fi
 
-SYS_QEMU_DIR="/etc/libvirt/qemu"
-SYS_POOL_NAME="default"
-SYS_POOL_PATH="/var/lib/libvirt/images"
+if [ $action == "delete" ]; then
+  # Опция --delete используется только для заданного пользователя
+  getent passwd "$USER" &>/dev/null
+  if [ $? -ne 0 ]; then
+    echo "Error: User missing or not found"
+    exit 1
+  fi
 
-# Создать виртуальные сети
+  read -p "$USER virtual machines will be deleted. Proceed? [y/N]: " response
+  if [[ "$response" =~ ^[Yy]$ ]]; then
+    # TODO Здесь удалить виртуальные машины и пул пользователя $USER
+    exit 0
+  else
+    echo "Info: Operation canceled"
+    exit 0
+  fi
+fi
+
+# Создать виртуальные сети, если не созданы
 for network_name in intnet extnet; do
   virsh -c "$URI" net-info $network_name &> /dev/null
   if [ $? -ne 0 ]; then
@@ -81,28 +99,29 @@ for network_name in intnet extnet; do
   fi
 done
 
-# Создать iso-образ с содержимым каталога distros в подкаталоге images
-genisoimage -input-charset utf-8 -r -J -joliet-long -U -o images/distros.iso distros &>/dev/null
-# Скопировать базовые образы в системный пул, используя rsync, если установлен, или cp
+# Проверить есть ли изменения в каталоге distros по сравнению с содержимым images/distros.iso
+is_changes=$(find distros -type f -newer images/distros.iso -print -quit)
+if [ -n "$is_changes" ]; then
+  # Создать iso-образ с содержимым каталога distros в подкаталоге images
+  genisoimage -input-charset utf-8 -r -J -joliet-long -U -o images/distros.iso distros &>/dev/null && touch images/distros.iso
+  echo "Info: distros.iso updated"
+fi
+
+# Скопировать базовые образы в системный пул, используя rsync (если установлен) или cp
 if [ -f "/usr/bin/rsync" ]; then
   rsync -ahu --progress images/* "$SYS_POOL_PATH"
 else
   cp -u images/* "$SYS_POOL_PATH"
 fi
-exit 0
 
 # Скопировать иконки к каталог темы оформления
 cp -u icons/*.png /usr/share/icons/hicolor/48x48/apps
 
-# Если пользователь не задан, завершить работу
-if [ -z "$USER" ]; then
-  echo "Warning: User not defined, skipping user settings on exit"
+# Если пользователь не задан или не существует, завершить работу
+getent passwd "$USER" &>/dev/null
+if [ $? -ne 0 ]; then
+  echo "Warning: User missing or not found, skipping user settings on exit"
   exit 0
-fi
-
-if ! getent passwd "$USER" &>/dev/null; then
-  echo "Error: No user '$USER' exist"
-  exit 1
 fi
 
 # Определить путь к домашнему каталогу пользователя
