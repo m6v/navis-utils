@@ -63,6 +63,14 @@ SYS_QEMU_DIR="/etc/libvirt/qemu"
 SYS_POOL_NAME="default"
 SYS_POOL_PATH="/var/lib/libvirt/images"
 
+# Определить путь к домашнему каталогу пользователя
+HOME=$(getent passwd "$USER" | cut -d: -f6)
+# Определить путь к каталогу рабочего стола
+DESKTOP=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
+# Имя пула всегда соответствует имени пользователя
+export pool_name="$USER"
+export pool_path="$HOME/.local/share/libvirt/images"
+
 # Запрошенное действие (создание или удаление виртуальных машин)
 if [ -z "$action" ]; then
   echo "Ошибка: Не задано действие"
@@ -79,7 +87,32 @@ if [ $action == "delete" ]; then
 
   read -p "$USER virtual machines will be deleted. Proceed? [y/N]: " response
   if [[ "$response" =~ ^[Yy]$ ]]; then
-    # TODO Здесь удалить виртуальные машины и пул пользователя $USER
+    # Перебирать все существующие ВМ и удалить те, которые используют пул pool_name
+    for vm in $(sudo -u $USER virsh -c "$URI" list --all --name | grep .); do
+      # Проверить xml-конфиг на наличие параметра pool='$pool_name'
+      sudo -u $USER virsh -c "$URI" dumpxml "$vm" | grep -oP "pool=\'$pool_name\'" &>/dev/null
+      if [ $? -eq 0 ]; then
+        # Принудительно остановить виртуальную машину, использующую пул
+        sudo -u $USER virsh -c "$URI" destroy "$vm" >/dev/null 2>&1
+        # Удалить виртуальную машину, использующую пул
+        echo -n "Info: "
+        sudo -u $USER virsh -c "$URI" undefine "$vm" | grep .
+      fi
+    done
+
+    # Проверить наличие пула pool_name и удалить, если есть
+    virsh -c "$URI" pool-info "$pool_name" &>/dev/null
+    if [ $? -eq 0 ]; then
+      # Остановить (размонтировать) пул
+      echo -n "Info: "
+      sudo virsh -c "$URI" pool-destroy $pool_name | grep .
+      # Удалить конфигурацию пула из libvirt
+      echo -n "Info: "
+      sudo virsh -c "$URI" pool-undefine $pool_name | grep .
+      # Удалить каталог пула вместе с содержимым
+      echo "Info: Каталог пула $pool_name удален"
+      rm -rf $pool_path
+    fi
     exit 0
   else
     echo "Info: Operation canceled"
@@ -124,14 +157,6 @@ if [ $? -ne 0 ]; then
   exit 0
 fi
 
-# Определить путь к домашнему каталогу пользователя
-HOME=$(getent passwd "$USER" | cut -d: -f6)
-# Определить путь к каталогу рабочего стола
-DESKTOP=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
-# Имя пула всегда соответствует имени пользователя
-export pool_name="$USER"
-export pool_path="$HOME/.local/share/libvirt/images"
-
 # Создать каталог пользовательского пула и изменить группу владельца
 sudo -u $USER mkdir -p "$pool_path"
 chown "$USER":libvirt "$pool_path"
@@ -145,7 +170,7 @@ for filename in $SYS_POOL_PATH/*.qcow2; do
 done
 
 # Проверить наличие пула pool_name и зарегистрировать, если он отсутствовал
-virsh -c "$URI" pool-info "$pool_name"
+virsh -c "$URI" pool-info "$pool_name" &>/dev/null
 if [ $? -ne 0 ]; then
   # Зарегистрировать стандартный путь как пул KVM, | grep . для подавления вывода пустых строк
   # NB! Запуск с правами пользователя обязателен, иначе завершается с ошибкой!
@@ -173,7 +198,8 @@ for filename in *.xml; do
   # Заменить в шаблоне xml-файла domain_name и pool_name, скопировать файл в каталог системной сессии
   envsubst < "$filename" > "$SYS_QEMU_DIR"/"$filename"
   # Зарегистрировать виртуальную машину в KVM
-  sudo -u "$USER" virsh -c "$URI" define "$SYS_QEMU_DIR"/"$filename"
+  echo -n "Info: "
+  sudo -u "$USER" virsh -c "$URI" define "$SYS_QEMU_DIR"/"$filename" | grep .
   [[ -f "$pool_path/${filename%.xml}.qcow2" ]] || echo "Warning: Image $pool_path/${filename%.xml}.qcow2 don't exist"
 
   # Получить заголовок виртуальной машины из тега <title>
