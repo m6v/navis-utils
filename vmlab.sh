@@ -50,6 +50,9 @@ while [ $# -gt 0 ]; do
     -d|--delete)
       action="delete"
       ;;
+    -f|--force)
+      force="y"
+      ;;
     *)
       echo "Ошибка: Неизвестный параметр: $1" >&2
       echo "Используйте -h или --help для справки." >&2
@@ -78,7 +81,7 @@ if [ -z "$action" ]; then
 fi
 
 if [ $action == "delete" ]; then
-  # Опция --delete используется только для заданного пользователя
+  # Опция --delete всегда должна использоваться с опцией -u, --user
   getent passwd "$USER" &>/dev/null
   if [ $? -ne 0 ]; then
     echo "Error: User missing or not found"
@@ -86,38 +89,38 @@ if [ $action == "delete" ]; then
   fi
 
   read -p "$USER virtual machines will be deleted. Proceed? [y/N]: " response
-  if [[ "$response" =~ ^[Yy]$ ]]; then
-    # Перебирать все существующие ВМ и удалить те, которые используют пул pool_name
-    for vm in $(sudo -u $USER virsh -c "$URI" list --all --name | grep .); do
-      # Проверить xml-конфиг на наличие параметра pool='$pool_name'
-      sudo -u $USER virsh -c "$URI" dumpxml "$vm" | grep -oP "pool=\'$pool_name\'" &>/dev/null
-      if [ $? -eq 0 ]; then
-        # Принудительно остановить виртуальную машину, использующую пул
-        sudo -u $USER virsh -c "$URI" destroy "$vm" >/dev/null 2>&1
-        # Удалить виртуальную машину, использующую пул
-        echo -n "Info: "
-        sudo -u $USER virsh -c "$URI" undefine "$vm" | grep .
-      fi
-    done
-
-    # Проверить наличие пула pool_name и удалить, если есть
-    virsh -c "$URI" pool-info "$pool_name" &>/dev/null
-    if [ $? -eq 0 ]; then
-      # Остановить (размонтировать) пул
-      echo -n "Info: "
-      sudo virsh -c "$URI" pool-destroy $pool_name | grep .
-      # Удалить конфигурацию пула из libvirt
-      echo -n "Info: "
-      sudo virsh -c "$URI" pool-undefine $pool_name | grep .
-      # Удалить каталог пула вместе с содержимым
-      echo "Info: Каталог пула $pool_name удален"
-      rm -rf $pool_path
-    fi
-    exit 0
-  else
+  if ! [[ "$response" =~ ^[Yy]$ ]]; then
     echo "Info: Operation canceled"
     exit 0
   fi
+
+  # Перебирать все существующие ВМ и удалить те, которые используют пул pool_name
+  for vm in $(sudo -u $USER virsh -c "$URI" list --all --name | grep .); do
+    # Проверить xml-конфиг на наличие параметра pool='$pool_name'
+    sudo -u $USER virsh -c "$URI" dumpxml "$vm" | grep -oP "pool=\'$pool_name\'" &>/dev/null
+    if [ $? -eq 0 ]; then
+      # Принудительно остановить виртуальную машину, использующую пул
+      sudo -u $USER virsh -c "$URI" destroy "$vm" >/dev/null 2>&1
+      # Удалить виртуальную машину, использующую пул
+      echo -n "Info: "
+      sudo -u $USER virsh -c "$URI" undefine "$vm" | grep .
+    fi
+  done
+
+  # Проверить наличие пула pool_name и удалить, если есть
+  virsh -c "$URI" pool-info "$pool_name" &>/dev/null
+  if [ $? -eq 0 ]; then
+    # Остановить (размонтировать) пул
+    echo -n "Info: "
+    sudo virsh -c "$URI" pool-destroy $pool_name | grep .
+    # Удалить конфигурацию пула из libvirt
+    echo -n "Info: "
+    sudo virsh -c "$URI" pool-undefine $pool_name | grep .
+    # Удалить каталог пула вместе с содержимым
+    echo "Info: Каталог пула $pool_name удален"
+    rm -rf $pool_path
+  fi
+  exit 0
 fi
 
 # Создать виртуальные сети, если не созданы
@@ -165,8 +168,13 @@ chmod 2755 "$pool_path"
 
 # Создать оверлейные образы в каталоге пользовательского пула
 for filename in $SYS_POOL_PATH/*.qcow2; do
-  echo -n "Info: "
-  sudo -u $USER qemu-img create -f qcow2 -F qcow2 -b $filename $pool_path/$(basename $filename)
+  # Создать только отсутствующие образы или все при заданном аргументе -f, --force
+  if [ ! -f $pool_path/$(basename $filename) ] || [ -n "$force" ]; then
+    echo -n "Info: "
+    sudo -u $USER qemu-img create -f qcow2 -F qcow2 -b $filename $pool_path/$(basename $filename)
+  else
+    echo "Warning: File $pool_path/$(basename $filename) exists. Skipping"
+  fi
 done
 
 # Проверить наличие пула pool_name и зарегистрировать, если он отсутствовал
