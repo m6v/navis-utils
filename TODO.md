@@ -21,3 +21,19 @@ virsh -c qemu:///system qemu-agent-command "$DOMAIN_NAME" '{"execute":"guest-get
 NB! При запуске ВМ с дисками в домашнем каталоге в убунте нужно в файл `/etc/libvirt/qemu.conf` добавить параметр `security_driver = "none"`, как обстоит ситуация в Астре уточнить!
 
 
+1. Определяем и создаем пул "default", указывающий на стандартную домашнюю папку ВМ
+```
+su - newuser -c "virsh pool-define-as default dir --target ~/.local/share/libvirt/images"
+```
+2. Активируем пул
+```
+su - newuser -c "virsh pool-start default"
+```
+3. Включаем автозапуск пула при каждом старте сессии
+```
+su - newuser -c "virsh pool-autostart default"
+```
+4. Настроить конфиг для запуска ВМ в сессии пользователя
+```
+echo 'security_driver = "none"' >> ~/.config/libvirt/qemu.conf
+```
