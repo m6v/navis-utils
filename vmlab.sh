@@ -95,14 +95,46 @@ if [ $action == "delete" ]; then
   fi
 
   # Перебирать все существующие ВМ и удалить те, которые используют пул pool_name
-  for vm in $(sudo -u $USER virsh -c qemu:///session list --all --name | grep .); do
-    # Принудительно остановить виртуальную машину, использующую пул
-    sudo -u $USER virsh destroy "$vm" >/dev/null 2>&1
-    # Удалить виртуальную машину, использующую пул
-    echo -n "Info: "
-    sudo -u $USER virsh undefine "$vm" | grep .
-    # TODO Удалить ярлык виртуальной машины с рабочего стала пользователя
+  # for vm in $(runuser -l "$USER" -c "virsh -c qemu:///session list --all --name | grep ."); do
+  #   # Принудительно остановить виртуальную машину, использующую пул
+  #  runuser -l "$USER" -c "virsh -c qemu:///session destroy $vm >/dev/null 2>&1"
+  #   # Удалить виртуальную машину, использующую пул
+  #  echo -n "Info: "
+  #  runuser -l "$USER" -c "virsh -c qemu:///session undefine $vm | grep ."
+  #   # TODO Удалить ярлык виртуальной машины с рабочего стала пользователя
+  # done
+
+  # Проверить, включен ли уже linger у пользователя или нет
+  is_linger_on=$(loginctl show-user "$USER" --property=Linger --value 2>/dev/null)
+  # Принудительно включить Linger (постоянное присутствие) для пользователя
+  loginctl enable-linger "$USER"
+
+  VIRSH_CMD="sudo -u $USER XDG_RUNTIME_DIR=/run/user/$(id -u "$USER") virsh -c qemu:///session"
+  echo $($VIRSH_CMD list --all --name)
+  echo $(sudo -u $USER virsh -c qemu:///session list --name)
+
+  for vm in $($VIRSH_CMD list --all --name); do
+    # Пропустить пустые строки
+    [ -z "$vm" ] && continue
+
+    echo "Обработка машины: $vm"
+
+    # Принудительно тушим (если машина работает)
+    $VIRSH_CMD destroy "$vm" 2>/dev/null
+
+    # Пауза для закрытия файловых блокировок до удаления XML
+    sleep 0.1
+
+    # Удалить конфигурацию и NVRAM из памяти и с диска
+    $VIRSH_CMD undefine "$vm" --nvram
   done
+
+  # Выключить Linger
+  if [ "$is_linger_on" == "no" ]; then
+    loginctl disable-linger "$USER" 2>/dev/null
+  fi
+
+  exit 0
 
   # Проверить наличие пула pool_name и удалить, если есть
   sudo -u $USER virsh pool-info "$pool_name" &>/dev/null
