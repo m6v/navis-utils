@@ -1,3 +1,4 @@
+1. Лучше сделать вначале `exec sudo -u USER "$0" "$@"`, а затем по необходимости использовать sudo
 1. Разобраться под рутом выполнять все манипуляции или под пользователем, сейчас пользователь включен в libvirt-admin, поэтому работает как угодно, но это неправильно!
 2. Попробовать решить задачу манипулирования временем не изнутри виртуальной машины сервера СЗИ, а снаружи (наиболее перспективный способ - использовать qemu-guest-agent)
 2. Продумать необходимость автоматического запуска ips-master и ips-slave при запуске arm-ips (использовать хук qemu)
@@ -20,20 +21,72 @@ virsh -c qemu:///system qemu-agent-command "$DOMAIN_NAME" '{"execute":"guest-get
 
 NB! При запуске ВМ с дисками в домашнем каталоге в убунте нужно в файл `/etc/libvirt/qemu.conf` добавить параметр `security_driver = "none"`, как обстоит ситуация в Астре уточнить!
 
+Чтобы при запуске графического интерфейса virt-manager у вас сразу отображалось и автоматически открывалось подключение к пользовательской сессии, вам нужно настроить параметры самого virt-manager.
+В Debian 13 настройка выполнена с помощью следующих команд
+```
+# Установить команду gsettings
+sudo apt install libglib2.0-bin
 
-1. Определяем и создаем пул "default", указывающий на стандартную домашнюю папку ВМ
+# Задать список подключений
+gsettings set org.virt-manager.virt-manager.connections uris "['qemu:///session']"
+
+# Включить для qemu:///session автоматическое подключение при старте
+gsettings set org.virt-manager.virt-manager.connections autoconnect "['qemu:///session']"
+
 ```
-su - newuser -c "virsh pool-define-as default dir --target ~/.local/share/libvirt/images"
+
+Чтобы постоянно не указывать сессию нужно настроить переменную LIBVIRT_DEFAULT_URI
 ```
-2. Активируем пул
+export LIBVIRT_DEFAULT_URI="qemu:///session"
 ```
-su - newuser -c "virsh pool-start default"
+
+## Настроить пул
 ```
-3. Включаем автозапуск пула при каждом старте сессии
-```
-su - newuser -c "virsh pool-autostart default"
-```
-4. Настроить конфиг для запуска ВМ в сессии пользователя
-```
+# Создать каталог пула
+mkdir -p ~/.local/share/libvirt/images"
+# Определить и создать пул "default", указывающий на стандартную домашнюю папку ВМ
+virsh -с qemu:///session pool-define-as default dir --target ~/.local/share/libvirt/images
+# Активировать пул
+virsh -с qemu:///session pool-start default
+# Включить автозапуск пула при каждом старте сессии
+virsh -с qemu:///session pool-autostart default
+# Настроить конфиг для запуска ВМ в сессии пользователя
 echo 'security_driver = "none"' >> ~/.config/libvirt/qemu.conf
+```
+
+## Создание сети
+```
+# Зарегистрировать сеть intnet в системной сессии libvirt
+echo "<network><name>intnet</name><bridge name='virbr0' stp='on' delay='0'/></network>" | sudo virsh net-define /dev/stdin
+# Включить автоматический запуск сети при загрузке ПК
+sudo virsh net-autostart intnet
+# Запустить сеть прямо сейчас
+sudo virsh net-start intnet
+```
+
+## Настройка разрешения на подключение машин в пользовательской сессии, к мостам virbr0 и virbr1
+```
+sudo mkdir -p /etc/qemu
+echo "allow virbr0" | sudo tee -a /etc/qemu/bridge.conf
+echo "allow virbr1" | sudo tee -a /etc/qemu/bridge.conf
+sudo chmod 4755 /usr/lib/qemu/qemu-bridge-helper
+```
+
+## Создать виртуальные машины
+```
+# Если нужно настраивать шаблон, то
+domain_name=test envsubst < arm-abi.xml | virsh -c qemu:///session define /dev/stdin
+# Если настройка не нужна, то
+cat arm-abi.xml | virsh -c qemu:///session define /dev/stdin
+# или
+virsh -c qemu:///session define <(cat arm-abi.xml)
+```
+
+## Удалить виртуальные машины
+```
+# Принудительно остановить все запущенные машины в сессии
+virsh -c qemu:///session list --name | xargs -I {} virsh -c qemu:///session destroy "{}"
+
+# Удалить регистрацию (конфигурацию) всех машин
+virsh -c qemu:///session list --all --name | xargs -I {} virsh -c qemu:///session undefine "{}" --nvram
 ```

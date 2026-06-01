@@ -31,9 +31,8 @@ fi
 # Добавить root'а в группу libvirt-admin, чтобы выполнять служебные операции
 usermod -aG libvirt-admin root
 
-USER=""
-# Если хотим применять для текущего пользователя, то раскомментировать
-# USER=$(logname)
+# Если пользователь не задан, использовать текущего
+USER=$(logname)
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -63,9 +62,6 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# Использовать системный сеанс, т.к. в сессионном сеансе запуск ВМ в Astra Linux не работает
-URI="qemu:///system"
-
 SYS_QEMU_DIR="/etc/libvirt/qemu"
 SYS_POOL_NAME="default"
 SYS_POOL_PATH="/var/lib/libvirt/images"
@@ -74,8 +70,8 @@ SYS_POOL_PATH="/var/lib/libvirt/images"
 HOME=$(getent passwd "$USER" | cut -d: -f6)
 # Определить путь к каталогу рабочего стола
 DESKTOP=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
-# В качестве имени пула использовать имя пользователя
-export pool_name="$USER"
+# Определить имя и каталог пользовательского пула
+export pool_name="default"
 export pool_path="$HOME/.local/share/libvirt/images"
 
 # Запрошенное действие (создание или удаление виртуальных машин)
@@ -99,28 +95,24 @@ if [ $action == "delete" ]; then
   fi
 
   # Перебирать все существующие ВМ и удалить те, которые используют пул pool_name
-  for vm in $(virsh -c "$URI" list --all --name | grep .); do
-    # Проверить xml-конфиг на наличие параметра pool='$pool_name'
-    virsh -c "$URI" dumpxml "$vm" | grep -oP "pool=\'$pool_name\'" &>/dev/null
-    if [ $? -eq 0 ]; then
-      # Принудительно остановить виртуальную машину, использующую пул
-      virsh -c "$URI" destroy "$vm" >/dev/null 2>&1
-      # Удалить виртуальную машину, использующую пул
-      echo -n "Info: "
-     virsh -c "$URI" undefine "$vm" | grep .
-    fi
+  for vm in $(sudo -u $USER virsh -c qemu:///session list --all --name | grep .); do
+    # Принудительно остановить виртуальную машину, использующую пул
+    sudo -u $USER virsh destroy "$vm" >/dev/null 2>&1
+    # Удалить виртуальную машину, использующую пул
+    echo -n "Info: "
+    sudo -u $USER virsh undefine "$vm" | grep .
     # TODO Удалить ярлык виртуальной машины с рабочего стала пользователя
   done
 
   # Проверить наличие пула pool_name и удалить, если есть
-  virsh -c "$URI" pool-info "$pool_name" &>/dev/null
+  sudo -u $USER virsh pool-info "$pool_name" &>/dev/null
   if [ $? -eq 0 ]; then
     # Остановить (размонтировать) пул
     echo -n "Info: "
-    sudo virsh -c "$URI" pool-destroy $pool_name | grep .
+    sudo -u $USER virsh pool-destroy $pool_name | grep .
     # Удалить конфигурацию пула из libvirt
     echo -n "Info: "
-    sudo virsh -c "$URI" pool-undefine $pool_name | grep .
+    sudo -u $USER virsh pool-undefine $pool_name | grep .
     # Удалить каталог пула вместе с содержимым
     echo "Info: Каталог пула $pool_name удален"
     rm -rf $pool_path
@@ -128,21 +120,24 @@ if [ $action == "delete" ]; then
   exit 0
 fi
 
+i=0
 # Создать виртуальные сети, если не созданы
 for network_name in intnet extnet; do
-  virsh -c "$URI" net-info $network_name &> /dev/null
+  virsh net-info $network_name &> /dev/null
   if [ $? -ne 0 ]; then
-    echo "Сеть $network_name не установлена, выполняем установку"
+    echo "Installing $network_name network"
     # Установить и запустить сеть $network_name
-    virsh -c "$URI" net-define <(echo "<network><name>${network_name}</name></network>")
+    echo "<network><name>$network_name</name><bridge name='virbr$i' stp='on' delay='0'/></network>" | sudo virsh net-define /dev/stdin
     virsh net-start $network_name
     virsh net-autostart $network_name
   fi
+  ((++i))
 done
 
-# Проверить есть ли изменения в каталоге distros по сравнению с содержимым images/distros.iso
+# Проверить есть ли изменения в каталоге distros по сравнению с содержимым images/distros.iso (если файл есть)
 is_changes=$(find distros -type f -newer images/distros.iso -print -quit)
-if [ -n "$is_changes" ]; then
+# Обновить образ, если он отсутствует или в каталоге distros есть более свежие файлы, чем в images/distros.iso
+if ! [ -f images/distros.iso ] || [ -n "$is_changes" ]; then
   # Создать iso-образ с содержимым каталога distros в подкаталоге images
   genisoimage -input-charset utf-8 -r -J -joliet-long -U -o images/distros.iso distros &>/dev/null && touch images/distros.iso
   echo "Info: distros.iso updated"
@@ -183,38 +178,37 @@ for filename in $SYS_POOL_PATH/*.qcow2; do
 done
 
 # Проверить наличие пула pool_name и зарегистрировать, если он отсутствовал
-virsh -c "$URI" pool-info "$pool_name" &>/dev/null
+runuser -l "$USER" -c "virsh pool-info $pool_name &>/dev/null"
 if [ $? -ne 0 ]; then
   # Зарегистрировать стандартный путь как пул KVM, | grep . для подавления вывода пустых строк
   # NB! Запуск с правами пользователя обязателен, иначе завершается с ошибкой
-  virsh -c "$URI" pool-define-as "$pool_name" --type dir --target "$pool_path" | grep .
-  virsh -c "$URI" pool-start "$pool_name" | grep .
-  virsh -c "$URI" pool-autostart "$pool_name" | grep .
+  runuser -l "$USER" -c "virsh -c qemu:///session pool-define-as $pool_name --type dir --target $pool_path | grep ."
+  runuser -l "$USER" -c "virsh -c qemu:///session pool-start $pool_name | grep ."
+  runuser -l "$USER" -c "virsh -c qemu:///session pool-autostart $pool_name | grep ."
 fi
 # Зарегистрировать скопированные образы
 echo -n "Info: "
-virsh -c "$URI" pool-refresh "$pool_name" | grep .
+runuser -l "$USER" -c "virsh -c qemu:///session pool-refresh $pool_name | grep ."
 
-for filename in *.xml; do
+# Использовать полный путь, т.к. относительный при запуске runuser -l "$USER" теряется
+for filename in $(pwd)/*.xml; do
   # При отутствии в каталоге xml выйти из единственной итерации цикла
   [ -e "$filename" ] || continue
 
-  # В качестве имени машины использовать имя xml-файла (без расширения) с суффиксом имени пользователя,
-  # экспорт для обработки с помощью envsubst. Если получится запускать ВМ в пользовательском сеансе,
-  # то суффикс можно не добавлять
-  export domain_name="${filename%.xml}-$USER"
+  # В качестве имени машины использовать имя файла (без расширения .xml)
+  domain_name=(basename "$filename" .xml)
+
   # Если машина $domain_name уже существует, пропустить итерацию цикла
-  if virsh -c "$URI" dominfo "$domain_name" >/dev/null 2>&1; then
+  if runuser -l "$USER" -c "virsh dominfo $domain_name >/dev/null 2>&1"; then
     echo "Warning: Domain $domain_name allready registered"
     continue
   fi
 
-  # Заменить в шаблоне xml-файла domain_name и pool_name, скопировать файл в каталог системной сессии
-  envsubst < "$filename" > "$SYS_QEMU_DIR"/"$filename"
   # Зарегистрировать виртуальную машину в KVM
   echo -n "Info: "
-  virsh -c "$URI" define "$SYS_QEMU_DIR"/"$filename" | grep .
-  [[ -f "$pool_path/${filename%.xml}.qcow2" ]] || echo "Warning: Image $pool_path/${filename%.xml}.qcow2 don't exist"
+  # Обязательно указывать $current_dir, т.к. при runuser -l "$USER" все окружение меняется
+  runuser -l "$USER" -c "virsh -c qemu:///session define $filename | grep ."
+  [[ -f "$pool_path/$domain_name.qcow2" ]] || echo "Warning: Image $pool_path/$domain_name.qcow2 don't exist"
 
   # Получить заголовок виртуальной машины из тега <title>
   export domain_title=$(grep -Po '^\s*<title>\K.*?(?=</title>)' $filename | head -n 1)
@@ -225,5 +219,5 @@ for filename in *.xml; do
   echo "Info: Shortcut for $domain_name created"
 done
 
-# Обычно работает без перезапуска, но иногда зависает
-# systemctl restart libvirtd
+# Перезапустить libvirtd, запущенный в контексте $USER
+runuser -l "$USER" -c "killall -HUP libvirtd 2>/dev/null"
