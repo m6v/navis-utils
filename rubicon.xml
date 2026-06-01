@@ -34,28 +34,28 @@
       <target dev='vda' bus='virtio'/>
     </disk>
 
-    <interface type='network'>
-      <mac address='08:00:27:3e:be:a1'/>
-      <source network='intnet'/>
-      <model type='e1000'/>
+    <interface type="mcast">
+      <mac address="08:00:27:3e:be:a1"/>
+      <source address="230.0.0.1" port="1234"/>
+      <model type="e1000e"/>
     </interface>
 
-    <interface type='network'>
-      <mac address='08:00:27:3e:be:a2'/>
-      <source network='intnet'/>
-      <model type='e1000'/>
+    <interface type="mcast">
+      <mac address="08:00:27:3e:be:a2"/>
+      <source address="230.0.0.1" port="1234"/>
+      <model type="e1000e"/>
     </interface>
 
-    <interface type='network'>
-      <mac address='08:00:27:3e:be:a3'/>
-      <source network='intnet'/>
-      <model type='e1000'/>
+    <interface type="mcast">
+      <mac address="08:00:27:3e:be:a3"/>
+      <source address="230.0.0.1" port="1234"/>
+      <model type="e1000e"/>
     </interface>
 
-    <interface type='network'>
-      <mac address='08:00:27:3e:be:a4'/>
-      <source network='extnet'/>
-      <model type='e1000'/>
+    <interface type="mcast">
+      <mac address="08:00:27:3e:be:a4"/>
+      <source address="230.0.0.2" port="1234"/>
+      <model type="e1000e"/>
     </interface>
 
     <graphics type='vnc' port='-1' autoport='yes' listen='127.0.0.1'>

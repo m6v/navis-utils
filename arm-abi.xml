@@ -40,8 +40,8 @@
       <readonly/>
     </disk>
 
-    <interface type='network'>
-      <source network='intnet'/>
+    <interface type='mcast'>
+      <source address='230.0.0.1' port='1234'/>
       <model type='virtio'/>
     </interface>
 

@@ -1,0 +1,5 @@
+<network>
+  <name>extnet</name>
+  <forward mode='bridge'/>
+  <bridge name='virbr1'/>
+</network>
