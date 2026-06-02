@@ -99,17 +99,25 @@ if [ $action == "delete" ]; then
     exit 0
   fi
 
+  # Удалить ярлыки виртуальных машин
+  for filename in $DESKTOP/*.desktop; do
+    grep "X-Related-To=vlab" "$filename" &>/dev/null
+    if [ $? -eq 0 ]; then
+      rm "$filename"
+    fi
+  done
+
   # Проверить, включен linger у пользователя или нет
   is_linger_on=$(loginctl show-user "$USER" --property=Linger --value 2>/dev/null)
   # Принудительно включить Linger (постоянное присутствие) для пользователя
   loginctl enable-linger "$USER"
 
   for vm in $(vrun list --all --name); do
-    # Принудительно тушим (если машина работает)
-    vrun destroy "$vm" 2>/dev/null
+    # Принудительно выключить (если работает) ВМ
+    vrun destroy "$vm" &>/dev/null
     # Пауза для закрытия файловых блокировок до удаления XML
     sleep 0.1
-    # Удалить конфигурацию и NVRAM из памяти и с диска
+    # Удалить конфигурацию ВМ и NVRAM из памяти и с диска
     echo -n "Info: "
     vrun undefine "$vm" --nvram | grep .
   done
