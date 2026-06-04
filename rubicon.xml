@@ -1,5 +1,5 @@
 <domain type='kvm'>
-  <name>rubicon</name>
+  <name>$domain_uuid</name>
   <title>ПАК "Рубикон"</title>
   <description>Программно-аппаратный комплекс «Комплекс противодействия программно-аппаратным воздействиям (КП ПАВ) «Рубикон» с поддержкой виртуальных сетей. Для входа в консоль восстановления использовать логин и пароль 'rescue'</description>
   <memory unit='KiB'>1048576</memory>
@@ -30,32 +30,32 @@
 
     <disk type='volume' device='disk'>
       <driver name='qemu' type='qcow2' cache='writeback'/>
-      <source pool='default' volume='rubicon.qcow2'/>
+      <source pool='$USER_POOL_NAME' volume='rubicon.qcow2'/>
       <target dev='vda' bus='virtio'/>
     </disk>
 
-    <interface type="mcast">
-      <mac address="08:00:27:3e:be:a1"/>
-      <source address="230.0.0.1" port="1234"/>
-      <model type="e1000e"/>
+    <interface type='network'>
+      <mac address='08:00:27:3e:be:a1'/>
+      <source network='intnet'/>
+      <model type='e1000'/>
     </interface>
 
-    <interface type="mcast">
-      <mac address="08:00:27:3e:be:a2"/>
-      <source address="230.0.0.1" port="1234"/>
-      <model type="e1000e"/>
+    <interface type='network'>
+      <mac address='08:00:27:3e:be:a2'/>
+      <source network='intnet'/>
+      <model type='e1000'/>
     </interface>
 
-    <interface type="mcast">
-      <mac address="08:00:27:3e:be:a3"/>
-      <source address="230.0.0.1" port="1234"/>
-      <model type="e1000e"/>
+    <interface type='network'>
+      <mac address='08:00:27:3e:be:a3'/>
+      <source network='intnet'/>
+      <model type='e1000'/>
     </interface>
 
-    <interface type="mcast">
-      <mac address="08:00:27:3e:be:a4"/>
-      <source address="230.0.0.2" port="1234"/>
-      <model type="e1000e"/>
+    <interface type='network'>
+      <mac address='08:00:27:3e:be:a4'/>
+      <source network='extnet'/>
+      <model type='e1000'/>
     </interface>
 
     <graphics type='vnc' port='-1' autoport='yes' listen='127.0.0.1'>

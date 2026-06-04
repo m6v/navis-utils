@@ -1,5 +1,5 @@
 <domain type='kvm'>
-  <name>arm-abi</name>
+  <name>$domain_uuid</name>
   <title>АРМ АБИ</title>
   <description></description>
   <memory unit='KiB'>2097152</memory>
@@ -30,7 +30,7 @@
 
     <disk type='volume' device='disk'>
       <driver name='qemu' type='qcow2' cache='writeback'/>
-      <source pool='default' volume='arm-abi.qcow2'/>
+      <source pool='$USER_POOL_NAME' volume='arm-abi.qcow2'/>
       <target dev='vda' bus='virtio'/>
     </disk>
 
@@ -40,8 +40,8 @@
       <readonly/>
     </disk>
 
-    <interface type='mcast'>
-      <source address='230.0.0.1' port='1234'/>
+    <interface type='network'>
+      <source network='intnet'/>
       <model type='virtio'/>
     </interface>
 

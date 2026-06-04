@@ -66,17 +66,19 @@ SYS_QEMU_DIR="/etc/libvirt/qemu"
 SYS_POOL_NAME="default"
 SYS_POOL_PATH="/var/lib/libvirt/images"
 
+URI="qemu:///system"
+
 # Определить путь к домашнему каталогу пользователя
 HOME=$(getent passwd "$USER" | cut -d: -f6)
 # Определить путь к каталогу рабочего стола
 DESKTOP=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
 # Определить имя и каталог пользовательского пула
-export pool_name="default"
-export pool_path="$HOME/.local/share/libvirt/images"
+export USER_POOL_NAME="$USER"
+export USER_POOL_PATH="$HOME/.local/share/libvirt/images"
 
 # Функция-обертка для virsh
 vrun() {
-    sudo -E -u $USER XDG_RUNTIME_DIR="/run/user/$(id -u $USER)" virsh -c qemu:///session $@
+    sudo -E -u $USER XDG_RUNTIME_DIR="/run/user/$(id -u $USER)" virsh -c $URI $@
 }
 
 # Запрошенное действие (создание или удаление виртуальных машин)
@@ -93,7 +95,7 @@ if [ $action == "delete" ]; then
     exit 1
   fi
 
-  read -p "$USER virtual machines will be deleted. Proceed? [y/N]: " response
+  read -p "User '$USER' domains will be deleted. Proceed? [y/N]: " response
   if ! [[ "$response" =~ ^[Yy]$ ]]; then
     echo "Info: Operation canceled"
     exit 0
@@ -112,47 +114,53 @@ if [ $action == "delete" ]; then
   # Принудительно включить Linger (постоянное присутствие) для пользователя
   loginctl enable-linger "$USER"
 
-  for vm in $(vrun list --all --name); do
-    # Принудительно выключить (если работает) ВМ
-    vrun destroy "$vm" &>/dev/null
-    # Пауза для закрытия файловых блокировок до удаления XML
-    sleep 0.1
-    # Удалить конфигурацию ВМ и NVRAM из памяти и с диска
-    echo -n "Info: "
-    vrun undefine "$vm" --nvram | grep .
+  # Перебирать все существующие ВМ и удалить те, которые используют пул USER_POOL_NAME
+  for vm in $(vrun list --all --name | grep .); do
+    # Проверить xml-конфиг на наличие параметра pool='$USER_POOL_NAME'
+    vrun dumpxml "$vm" | grep -oP "pool=\'$USER_POOL_NAME\'" &>/dev/null
+    if [ $? -eq 0 ]; then
+      # Принудительно остановить виртуальную машину, использующую пул
+      vrun destroy "$vm" >/dev/null 2>&1
+      # Удалить виртуальную машину и NVRAM, использующую пул
+      echo -n "Info: "
+      vrun undefine "$vm" --nvram | grep .
+    fi
   done
+
 
   # Выключить Linger
   if [ "$is_linger_on" == "no" ]; then
     loginctl disable-linger "$USER" 2>/dev/null
   fi
 
-  # Проверить наличие пула pool_name и удалить, если есть
-  vrun pool-info "$pool_name" &>/dev/null
+  # Проверить наличие пула USER_POOL_NAME и удалить, если есть
+  vrun pool-info "$USER_POOL_NAME" &>/dev/null
   if [ $? -eq 0 ]; then
     # Остановить (размонтировать) пул
     echo -n "Info: "
-    vrun pool-destroy $pool_name | grep .
+    vrun pool-destroy $USER_POOL_NAME | grep .
     # Удалить конфигурацию пула из libvirt
     echo -n "Info: "
-    vrun pool-undefine $pool_name | grep .
+    vrun pool-undefine $USER_POOL_NAME | grep .
     # Удалить каталог пула вместе с содержимым
-    echo "Info: Каталог пула $pool_name удален"
-    rm -rf $pool_path
+    echo "Info: Каталог пула $USER_POOL_NAME удален"
+    rm -rf $USER_POOL_PATH
   fi
   exit 0
 fi
 
 # Создать виртуальные сети, если не созданы
-# mkdir -p /etc/qemu && echo "allow all" | sudo tee -a /etc/qemu/bridge.conf
 for network_name in intnet extnet; do
   vrun net-info $network_name &> /dev/null
   if [ $? -ne 0 ]; then
     echo "Installing $network_name network"
     # Установить и запустить сеть $network_name (первой команде передается имя файла, остальным - имя сети)
-    vrun net-define $network_name
-    vrun net-start $network_name
-    vrun net-autostart $network_name
+    # vrun net-define $network_name
+    # vrun net-start $network_name
+    # vrun net-autostart $network_name
+    virsh -c $URI net-define $network_name
+    virsh -c $URI net-start $network_name
+    virsh -c $URI net-autostart $network_name
   fi
 done
 
@@ -183,34 +191,35 @@ if [ $? -ne 0 ]; then
 fi
 
 # Создать каталог пользовательского пула и изменить группу владельца
-sudo -u $USER mkdir -p "$pool_path"
-chown "$USER":libvirt "$pool_path"
+sudo -u $USER mkdir -p "$USER_POOL_PATH"
+chown "$USER":libvirt "$USER_POOL_PATH"
 # Установить SGID-бит (2), чтобы новые файлы внутри пула автоматически получали группу libvirt
-chmod 2755 "$pool_path"
+chmod 2755 "$USER_POOL_PATH"
 
 # Создать оверлейные образы в каталоге пользовательского пула
 for filename in $SYS_POOL_PATH/*.qcow2; do
   # Создать только отсутствующие образы или пересоздать все, если задан аргумент -f, --force
-  if [ ! -f $pool_path/$(basename $filename) ] || [ -n "$force" ]; then
+  if [ ! -f $USER_POOL_NAME/$(basename $filename) ] || [ -n "$force" ]; then
     echo -n "Info: "
-    sudo -u $USER qemu-img create -f qcow2 -F qcow2 -b $filename $pool_path/$(basename $filename)
+    sudo -u $USER qemu-img create -f qcow2 -F qcow2 -b $filename $USER_POOL_PATH/$(basename $filename)
   else
-    echo "Warning: File $pool_path/$(basename $filename) exists. Skipping"
+    echo "Warning: File $USER_POOL_PATH/$(basename $filename) exists. Skipping"
   fi
 done
 
-# Проверить наличие пула pool_name и зарегистрировать, если он отсутствовал
-vrun pool-info $pool_name &>/dev/null
+# Проверить наличие пула USER_POOL_NAME и зарегистрировать, если он отсутствовал
+vrun pool-info $USER_POOL_NAME &>/dev/null
 if [ $? -ne 0 ]; then
   # Зарегистрировать стандартный путь как пул KVM, | grep . для подавления вывода пустых строк
-  vrun pool-define-as "$pool_name" --type dir --target "$pool_path" | grep .
-  vrun pool-start $pool_name | grep .
-  vrun pool-autostart $pool_name | grep .
-
+  echo pool-define-as "$USER_POOL_NAME" --type dir --target "$USER_POOL_PATH"
+  vrun pool-define-as "$USER_POOL_NAME" --type dir --target "$USER_POOL_PATH" | grep .
+  vrun pool-start $USER_POOL_NAME | grep .
+  vrun pool-autostart $USER_POOL_NAME | grep .
 fi
+
 # Зарегистрировать скопированные образы
 echo -n "Info: "
-vrun pool-refresh $pool_name | grep .
+vrun pool-refresh $USER_POOL_NAME | grep .
 
 # Использовать полный путь, т.к. относительный при запуске runuser -l "$USER" теряется
 for filename in $(pwd)/*.xml; do
@@ -220,6 +229,10 @@ for filename in $(pwd)/*.xml; do
   # В качестве имени машины использовать имя файла (без расширения .xml)
   domain_name=$(basename "$filename" .xml)
   export domain_name
+  # Случайное имя для машины, на случай многопользовательского использования в системном пуле
+  # для применения использовать $domain_uuid в теге <name> конфигурационного xml-файла
+  domain_uuid=$(openssl rand -hex 4)
+  export domain_uuid
 
   # Если машина $domain_name уже существует, пропустить итерацию цикла
   if runuser -l "$USER" -c "virsh dominfo $domain_name >/dev/null 2>&1"; then
@@ -229,12 +242,12 @@ for filename in $(pwd)/*.xml; do
 
   # Зарегистрировать виртуальную машину в KVM
   echo -n "Info: "
-  echo $filename
-  vrun define $filename | grep .
-  [[ -f "$pool_path/$domain_name.qcow2" ]] || echo "Warning: Image $pool_path/$domain_name.qcow2 don't exist"
+  envsubst < "$filename" > /tmp/vm.xml
+  vrun define /tmp/vm.xml | grep .
+  [[ -f "$USER_POOL_PATH/$domain_name.qcow2" ]] || echo "Warning: Image $USER_POOL_PATH/$domain_name.qcow2 don't exist"
 
   # Получить заголовок виртуальной машины из тега <title>
-  export domain_title=$(grep -Po '^\s*<title>\K.*?(?=</title>)' $filename | head -n 1)
+  export domain_title=$(grep -Po '^\s*<title>\K.*?(?=</title>)' "$filename" | head -n 1)
   # Если тега <title> в файле нет, использовать имя домена
   [[ -z "$domain_title" ]] && export domain_title="$domain_name"
   # Используется tee, чтобы создаваемый файл приналежал $USER (через перенаправление не работает)
@@ -242,5 +255,7 @@ for filename in $(pwd)/*.xml; do
   echo "Info: Shortcut for $domain_name created"
 done
 
-# Перезапустить libvirtd, запущенный в контексте $USER
-runuser -l "$USER" -c "killall -HUP libvirtd 2>/dev/null"
+# Перезапустить libvirtd, запущенный в контексте $USER, если использовалать сессия пользователя
+if [ "$URI" = "qemu:///session" ]; then
+  runuser -l "$USER" -c "killall -HUP libvirtd 2>/dev/null"
+fi
