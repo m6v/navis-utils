@@ -1,5 +1,5 @@
 <domain type='kvm'>
-  <name>$domain_uuid</name>
+  <name>arm-ipc</name>
   <title>АРМ управления СКЗИ</title>
   <description>АРМ управления АПКШ "Континент". Для входа использовать логин 'administrator' и пароль '11111111'</description>
   <memory unit='KiB'>4194304</memory>

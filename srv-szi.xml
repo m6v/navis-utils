@@ -1,5 +1,5 @@
 <domain type='kvm'>
-  <name>$domain_uuid</name>
+  <name>srv-szi</name>
   <title>Сервер СЗИ</title>
   <description></description>
   <memory unit='KiB'>4194304</memory>

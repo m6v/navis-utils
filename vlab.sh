@@ -29,7 +29,10 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Добавить root'а в группу libvirt-admin, чтобы выполнять служебные операции
-usermod -aG libvirt-admin root
+if ! id -nG root | grep -q "\blibvirt-admin\b"; then
+    usermod -aG "libvirt-admin" root
+    systemctl restart libvirtd
+fi
 
 # Если пользователь не задан, использовать текущего
 USER=$(logname)
@@ -229,10 +232,6 @@ for filename in $(pwd)/*.xml; do
   # В качестве имени машины использовать имя файла (без расширения .xml)
   domain_name=$(basename "$filename" .xml)
   export domain_name
-  # Случайное имя для машины, на случай многопользовательского использования в системном пуле
-  # для применения использовать $domain_uuid в теге <name> конфигурационного xml-файла
-  domain_uuid=$(openssl rand -hex 4)
-  export domain_uuid
 
   # Если машина $domain_name уже существует, пропустить итерацию цикла
   if runuser -l "$USER" -c "virsh dominfo $domain_name >/dev/null 2>&1"; then

@@ -1,5 +1,5 @@
 <domain type='kvm'>
-  <name>$domain_uuid</name>
+  <name>arm-abi</name>
   <title>АРМ АБИ</title>
   <description></description>
   <memory unit='KiB'>2097152</memory>
