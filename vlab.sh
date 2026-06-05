@@ -47,7 +47,7 @@ while [ $# -gt 0 ]; do
       shift
       USER="$1"
       ;;
-    -с|--create)
+    -c|--create)
       action="create"
       ;;
     -d|--delete)
@@ -158,12 +158,12 @@ for network_name in intnet extnet; do
   if [ $? -ne 0 ]; then
     echo "Installing $network_name network"
     # Установить и запустить сеть $network_name (первой команде передается имя файла, остальным - имя сети)
-    # vrun net-define $network_name
-    # vrun net-start $network_name
-    # vrun net-autostart $network_name
-    virsh -c $URI net-define $network_name
-    virsh -c $URI net-start $network_name
-    virsh -c $URI net-autostart $network_name
+    vrun net-define $network_name
+    vrun net-start $network_name
+    vrun net-autostart $network_name
+    # virsh -c $URI net-define $network_name
+    # virsh -c $URI net-start $network_name
+    # virsh -c $URI net-autostart $network_name
   fi
 done
 
