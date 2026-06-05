@@ -9,22 +9,77 @@
 6. Копирует из текущего каталога все qcow2-образы дисков в созданный пул и регистрирует их;
 7. Создает виртуальные машины по всем xml-описаниям, имеющимся в текущем каталоге.
 
-Для создания пустых образов нужной емкости использовать команды:
+## Действия после установки Astra Linux
+```
+# Удалить ufw
+sudo apt purge ufw -y
+
+# Установить службу управления nftables
+sudo apt install nftables -y
+
+# Создать эталонный файл правил в файле /etc/nftables.conf
+cat << EOF > /etc/nftables.conf
+#!/usr/sbin/nft -f
+
+# Полностью очистить старые правила перед загрузкой
+flush ruleset
+
+table inet filter {
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        # Разрешить уже установленные и доверенные соединения
+        ct state established,related accept
+
+        # Разрешить локальную петлю (loopback) для внутренних служб
+        iif "lo" accept
+
+        # Разрешить пинг (ICMP)
+        ip protocol icmp accept
+        ip6 nexthdr icmpv6 accept
+
+        # Открыть порты SSH (22) и VNC (5900)
+        tcp dport 22 accept
+        tcp dport 5900 accept
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}
+EOF
+
+# Включить nftables и добавить его в автозагрузку операционной системы
+sudo systemctl enable --now nftables
+
+# Установить метапакет astra-kvm
+sudo apt install astra-kvm
+
+# Отключить устанавливаемый вместе с astra-kvm фаервол firewalld
+sudo systemctl stop firewalld
+sudo systemctl mask firewalld
+
+# Перевести libvirt на нативный nftables
+sudo echo 'firewall_backend = "nftables"' >> /etc/libvirt/network.conf
+
+# Перезапустить виртуализацию для применения настроек
+sudo systemctl restart libvirtd
+```
+
+## Создание пустых образов
 ```
 qemu-img create -f qcow2 arm-abi.qcow2 16G
 qemu-img create -f qcow2 srv-szi.qcow2 32G
-
-
-Разовые настройки после установки системы
 ```
-# Удалить ufw
-sudo apt purge ufw
 
+## Действия в процессе развертывания
+```
 # Включить пользователя root в группу libvirt-admin
 usermod -aG libvirt-admin root
-```
-
-```
 # Включить пользователя в группы для работы со средой виртуализации
 sudo usermod -a -G kvm,libvirt,libvirt-qemu,libvirt-admin $USER
 ```
@@ -39,9 +94,12 @@ sudo usermod -a -G kvm,libvirt,libvirt-qemu,libvirt-admin $USER
 и перезапустить службу виртуализации `sudo systemctl restart libvirtd`, а в Astra дополнительно установить пакет `apt install astra-kvm-secure`.
 
 # Успешный запуск в пользовательской сессии
-После многичисленных попыток запуска ВМ в пользовательской сессии помогло добавление параметра, отключающего Parsec-драйвер безопасности для пользователя  security_driver = "none" в ~/.config/libvirt/qemu.conf
+После многочисленных попыток запуска ВМ в пользовательской сессии помогло добавление параметра, отключающего Parsec-драйвер безопасности для пользователя помогло
+```
+sudo echo 'security_driver = "none"' >> ~/.config/libvirt/qemu.conf
+```
 
-Нужно понять повлияли каким-то образом предыдущие настройки или изначально было достаточно установить этот параметр!
+NB! Нужно понять повлияли каким-то образом предыдущие настройки или изначально было достаточно установить этот параметр!
 Перед запуском были почищены остаточные конфигурации
 ```
 mkdir -p ~/.cache/libvirt/qemu/log
