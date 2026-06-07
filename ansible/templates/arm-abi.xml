@@ -30,7 +30,7 @@
 
   <disk type='volume' device='disk'>
     <driver name='qemu' type='qcow2' cache='writeback'/>
-    <source pool='{{ pool_name }}' volume='{{ item }}.qcow2'/>
+    <source pool='{{ user_pool_name }}' volume='{{ item }}.qcow2'/>
     <target dev='vda' bus='virtio'/>
   </disk>
 

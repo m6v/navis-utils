@@ -1,24 +1,24 @@
 ---
-- name: Инициализация учетных записей пользователей в УТК-СЗИ
+- name: Инициализация учетных записей пользователей на рабочих местах УТК-СЗИ
   hosts: "{{ host | default('learners') }}"
   become: true
   vars:
     # Имя пользователя взять из переданной переменной `user`
     username: "{{ user }}"
-    
-    # Имя персонального пула хранения в Libvirt (совпадает с именем пользователя)
-    pool_name: "{{ user }}"
-    
-    # Путь к персональному каталогу хранения в домашней папке ученика
-    pool_path: "/home/{{ user }}/.local/libvirt/images"
 
-    # Путь к дефолтному пулу, где лежат базовые шаблоны
-    base_images_path: "/var/lib/libvirt/images"
+    # Имя пользовательского пула хранения в Libvirt (совпадает с именем пользователя)
+    user_pool_name: "{{ user }}"
+    
+    # Путь к пользовательскому каталогу хранения в домашней папке обучваемого
+    user_pool_path: "/home/{{ user }}/.local/libvirt/images"
+
+    # Путь к дефолтному пулу с базовыми шаблонами
+    system_pool_path: "/var/lib/libvirt/images"
 
   pre_tasks:
     - name: Валидация входных параметров (наличие host и user)
       fail:
-        msg: "Ошибка! Вы должны передать параметры host и user. Пример: -e 'host=lws-01 user=ivanov'"
+        msg: "Ошибка! Не задан параметр host и/или user. Пример: -e 'host=lws-01 user=ivanov'"
       when: (user is not defined) or (host is not defined)
       tags: always
 
@@ -29,7 +29,7 @@
       tags: always
 
   tasks:
-    - name: Проверка, существует ли уже обучаемый в операционной системе
+    - name: Проверка наличия учетной записи обучаемого на целевом хосте
       getent:
         database: passwd
         key: "{{ username }}"
@@ -40,7 +40,7 @@
 
     - name: Логирование статуса пользователя
       debug:
-        msg: "Пользователь {{ username }} уже создан. Пропускаем создание и ввод пароля."
+        msg: "Пользователь {{ username }} создан, пропускаем создание и ввод пароля"
       when: user_check.ansible_facts.getent_passwd is defined
       tags: always
 
@@ -72,7 +72,7 @@
         - password_input.user_input != password_confirm.user_input
       tags: always
 
-    - name: Создание учетной записи обучаемого (без установки пароля)
+    - name: Создание учетной записи обучаемого
       user:
         name: "{{ username }}"
         groups:
@@ -86,96 +86,96 @@
         create_home: yes
       when: user_check.ansible_facts.getent_passwd is not defined
 
-    - name: Установка пароля пользователя силами СЗИ Astra Linux
+    - name: Установка пароля учетной записи обучаемого
       shell: "echo '{{ username }}:{{ password_input.user_input }}' | chpasswd"
       no_log: true
       when: user_check.ansible_facts.getent_passwd is not defined
 
     - name: Рекурсивное создание структуры каталогов .local/libvirt/images
       file:
-        path: "{{ pool_path }}"
+        path: "{{ user_pool_path }}"
         state: directory
         owner: "{{ username }}"
         group: "{{ username }}"
         mode: '0711'
 
-    - name: Проверка, зарегистрирован ли пул хранения с именем ученика в libvirt
-      command: virsh pool-info {{ pool_name }}
+    - name: Проверка, зарегистрирован ли пул хранения с именем обучаемого
+      command: virsh pool-info {{ user_pool_name }}
       register: pool_check
       failed_when: false
       changed_when: false
 
-    - name: Регистрация, запуск и добавление персонального пула в автозагрузку
+    - name: Регистрация, запуск и добавление пользовательского пула в автозагрузку
       command: "{{ item }}"
       with_items:
-        - "virsh pool-define-as {{ pool_name }} dir --target {{ pool_path }}"
-        - "virsh pool-start {{ pool_name }}"
-        - "virsh pool-autostart {{ pool_name }}"
+        - "virsh pool-define-as {{ user_pool_name }} dir --target {{ user_pool_path }}"
+        - "virsh pool-start {{ user_pool_name }}"
+        - "virsh pool-autostart {{ user_pool_name }}"
       when: pool_check.rc != 0
 
-    - name: Принудительное обновление пула для фиксации прав
-      command: "virsh pool-refresh {{ pool_name }}"
+    - name: Принудительное обновление пула
+      command: "virsh pool-refresh {{ user_pool_name }}"
       failed_when: false
       changed_when: false
 
     - name: Поиск всех базовых образов qcow2 в системном пуле хранения
       find:
-        paths: "{{ base_images_path }}"
+        paths: "{{ system_pool_path }}"
         patterns: "*.qcow2"
       register: base_images
 
-    - name: Формирование чистого списка имен виртуальных машин для учебного класса
+    - name: Формирование списка имен виртуальных машин для учебного класса
       set_fact:
-        classroom_vms: "{{ base_images.files | map(attribute='path') | map('basename') | map('regex_replace', '\\.qcow2$', '') | list }}"
+        user_domains: "{{ base_images.files | map(attribute='path') | map('basename') | map('regex_replace', '\\.qcow2$', '') | list }}"
 
-    - name: Создание оверлейных дисков для всех найденных системных шаблонов
+    - name: Создание оверлейных дисков в пользовательском пуле для всех базовых образов qcow2
       command: >
         qemu-img create -f qcow2 -F qcow2 
-        -b "{{ base_images_path }}/{{ item }}.qcow2" 
-        "{{ pool_path }}/{{ item }}.qcow2"
-      loop: "{{ classroom_vms }}"
+        -b "{{ system_pool_path }}/{{ item }}.qcow2" 
+        "{{ user_pool_path }}/{{ item }}.qcow2"
+      loop: "{{ user_domains }}"
       args:
-        creates: "{{ pool_path }}/{{ item }}.qcow2"
+        creates: "{{ user_pool_path }}/{{ item }}.qcow2"
 
     - name: Восстановление прав владельца на созданные оверлейные диски
       file:
-        path: "{{ pool_path }}"
+        path: "{{ user_pool_path }}"
         state: directory
         owner: "{{ username }}"
         group: "{{ username }}"
         recurse: yes
 
-    - name: Принудительное обновление персонального пула Libvirt
-      command: "virsh pool-refresh {{ pool_name }}"
+    - name: Принудительное обновление пользовательского пула Libvirt
+      command: "virsh pool-refresh {{ user_pool_name }}"
       failed_when: false
       changed_when: false
 
-    - name: Генерация уникальных XML-конфигураций ВМ из шаблонов для ученика
+    - name: Генерация XML-конфигураций виртуальных машин из шаблонов
       template:
         src: "templates/{{ item }}.xml"
         dest: "/tmp/{{ item }}.xml"
         owner: root
         group: root
         mode: '0644'
-      loop: "{{ classroom_vms }}"
+      loop: "{{ user_domains }}"
 
-    - name: Принудительное удаление старой регистрации ВМ (если окружение сбрасывается)
+    - name: Принудительное удаление виртуальных машин
       command: "virsh undefine {{ item }} --nvram"
-      loop: "{{ classroom_vms }}"
+      loop: "{{ user_domains }}"
       failed_when: false
 
-    - name: Регистрация (определение) виртуальных машин в гипервизоре Libvirt
+    - name: Регистрация (определение) виртуальных машин
       command: "virsh define /tmp/{{ item }}.xml"
-      loop: "{{ classroom_vms }}"
+      loop: "{{ user_domains }}"
 
-    - name: Динамическое определение пути к Рабочему столу пользователя
+    - name: Динамическое определение пути к каталогу рабочего стола пользователя
       command: "xdg-user-dir DESKTOP"
       become_user: "{{ username }}"
       register: xdg_desktop_path
       changed_when: false
       failed_when: false
 
-    - name: Установка альтернативного пути, если xdg-user-dir не вернул результат
+    - name: Установка дефолтного пути, если xdg-user-dir не вернул результат
       set_fact:
         final_desktop_path: "{{ xdg_desktop_path.stdout | default('/home/' ~ username ~ '/Desktop') }}"
 
@@ -187,7 +187,7 @@
         group: "{{ username }}"
         mode: '0755'
 
-    - name: Размещение ярлыков запуска для каждой созданной ВМ на Рабочем столе
+    - name: Размещение ярлыков запуска виртуальных машин на рабочем столе
       template:
         src: templates/shortcut.desktop.tmpl
         dest: "{{ final_desktop_path }}/run_{{ item }}.desktop"
@@ -195,8 +195,7 @@
         group: "{{ username }}"
         mode: '0755'
       vars:
-        xml_content: "{{ lookup('file', 'templates/' ~ item ~ '.xml') }}"
-        parsed_title: "{{ xml_content | regex_replace('(?s).*<title>(.*?)</title>.*', '\\1') }}"
-        vm_title: "{{ item if parsed_title.startswith('<') else parsed_title }}"
+        # Если регулярный поиск не нашёл тег <title>, default(item, true) подставит имя виртуальной машины
+        vm_title: "{{ lookup('file', 'templates/' ~ item ~ '.xml') | regex_search('<title>(.*?)</title>', '\\1') | first | default(item, true) }}"
         vm_icon: "{{ item }}.png"
-      loop: "{{ classroom_vms }}"
+      loop: "{{ user_domains }}"
