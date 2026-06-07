@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+# Имя ярлыка по-прежнему берется из тега <title> XML-конфига
+Name={{ vm_title }}
+Comment=Быстрый запуск лабораторной виртуальной машины
+# Команда запуска: принудительно включает ВМ и открывает её консоль в virt-manager
+Exec=bash -c "virsh --connect qemu:///system start {{ username }}-{{ item.path | basename | regex_replace('\.qcow2$', '') }}; virt-manager --connect qemu:///system --show-domain-console {{ username }}-{{ item.path | basename | regex_replace('\.qcow2$', '') }}"
+Icon=vm-class-icon.png
+Terminal=false
+StartupNotify=true
+Categories=Development;
