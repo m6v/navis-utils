@@ -1,5 +1,5 @@
 ---
-- name: Управление учетными записями обучаемых на Astra Linux SE 1.7
+- name: Management of learner accounts on Astra Linux SE 1.7
   hosts: "{{ host | default('learners') }}"
   become: true
   vars:
@@ -8,6 +8,9 @@
     
     # Путь к персональному каталогу хранения в домашней папке ученика
     pool_path: "/home/{{ user }}/.local/libvirt/images"
+
+    # Путь к дефолтному пулу, где лежат базовые шаблоны
+    base_images_path: "/var/lib/libvirt/images"
 
   pre_tasks:
     - name: Валидация входных параметров (наличие host и user)
@@ -22,6 +25,7 @@
       when: host not in groups['all']
       tags: always
 
+  tasks:
     - name: Проверка, существует ли уже обучаемый в операционной системе
       getent:
         database: passwd
@@ -30,25 +34,27 @@
       # Запрещаем Ansible аварийно завершать работу, если пользователя нет
       failed_when: false
       changed_when: false
-      tags: testing
+      tags: always
 
     - name: Логирование статуса пользователя
       debug:
         msg: "Пользователь {{ username }} уже создан. Пропускаем создание и ввод пароля."
-      # Выполняем, если getent_passwd БЫЛ успешно создан в памяти (пользователь найден)
+      # Выполняем, если getent_passwd был успешно создан в памяти (пользователь найден)
       when: user_check.ansible_facts.getent_passwd is defined
-      tags: testing
+      tags: always
 
     - name: Интерактивный запрос пароля для нового ученика
       pause:
         prompt: "Введите пароль пользователя {{ inventory_hostname }}"
         echo: false
       register: password_input
+      # Выполняем запрос локально на вашем ПК, чтобы клавиатура работала
       delegate_to: localhost
+      # Запускаем от имени вашего текущего локального пользователя (без sudo)
       become: false
-      # Запрашиваем, если getent_passwd НЕ определен (пользователя нет в системе)
+      # Запрашиваем, если getent_passwd не определен (пользователя нет в системе)
       when: hostvars[inventory_hostname].user_check.ansible_facts.getent_passwd is not defined
-      tags: testing
+      tags: always
 
     - name: Интерактивный запрос подтверждения пароля
       pause:
@@ -58,7 +64,7 @@
       delegate_to: localhost
       become: false
       when: hostvars[inventory_hostname].user_check.ansible_facts.getent_passwd is not defined
-      tags: testing
+      tags: always
 
     - name: Проверка совпадения введенных паролей
       fail:
@@ -66,7 +72,7 @@
       when: 
         - hostvars[inventory_hostname].user_check.ansible_facts.getent_passwd is not defined
         - password_input.user_input != password_confirm.user_input
-      tags: testing
+      tags: always
 
     - name: Создание учетной записи обучаемого (без установки пароля)
       user:
@@ -82,7 +88,6 @@
         state: present
         create_home: yes
       when: user_check.ansible_facts.getent_passwd is not defined
-      tags: testing
 
     - name: Установка пароля пользователя силами СЗИ Astra Linux
       # Передаем чистый пароль в системную утилиту chpasswd внутри виртуалки
@@ -90,7 +95,6 @@
       # Скрываем пароль из логов в целях безопасности
       no_log: true
       when: user_check.ansible_facts.getent_passwd is not defined
-      tags: testing
 
     - name: Рекурсивное создание структуры каталогов .local/libvirt/images
       file:
@@ -100,14 +104,12 @@
         group: "{{ username }}"
         # Права 711 позволяют системному демону libvirt заходить внутрь папки
         mode: '0711'
-      tags: testing
 
     - name: Проверка, зарегистрирован ли пул хранения с именем ученика в libvirt
       command: virsh pool-info {{ username }}
       register: pool_check
       failed_when: false
       changed_when: false
-      tags: testing
 
     - name: Регистрация, запуск и добавление персонального пула в автозагрузку
       command: "{{ item }}"
@@ -116,88 +118,77 @@
         - "virsh pool-start {{ username }}"
         - "virsh pool-autostart {{ username }}"
       when: pool_check.rc != 0
-      tags: testing
+
+    - name: Принудительное обновление пула для фиксации прав
+      command: "virsh pool-refresh {{ username }}"
+      failed_when: false
+      changed_when: false
 
     - name: Поиск всех базовых образов qcow2 в системном пуле хранения
       find:
-        paths: "{{ base_images_path | default('/var/lib/libvirt/images') }}"
+        paths: "{{ base_images_path }}"
         patterns: "*.qcow2"
       register: found_base_images
-      tags: testing
 
     - name: Создание оверлейных дисков для всех найденных системных шаблонов
-      # Убрали условие when. Теперь задача будет запускаться всегда.
-      # Но параметр creates ниже защитит ваши диски от затирания при повторных прогонах.
+      # Внешние одинарные кавычки экранируют регулярное выражение на 100%
       command: >
         qemu-img create -f qcow2 -F qcow2 
         -b "{{ item.path }}" 
-        "{{ pool_path }}/{{ username }}-{{ (item.path | basename | splitext)[0] }}.qcow2"
+        '{{ pool_path }}/{{ item.path | basename | regex_replace(".qcow2$", "") }}.qcow2'
       loop: "{{ found_base_images.files }}"
       args:
-        creates: "{{ pool_path }}/{{ username }}-{{ (item.path | basename | splitext)[0] }}.qcow2"
+        creates: '{{ pool_path }}/{{ item.path | basename | regex_replace(".qcow2$", "") }}.qcow2'
       loop_control:
         label: "{{ item.path | basename }}"
-      tags: testing
 
     - name: Восстановление прав владельца на созданные оверлейные диски
-      # Убрали условие when, чтобы права на новые диски выставлялись всегда
       file:
         path: "{{ pool_path }}"
         state: directory
         owner: "{{ username }}"
         group: "{{ username }}"
         recurse: yes
-      tags: testing
 
     - name: Принудительное обновление персонального пула Libvirt
       command: "virsh pool-refresh {{ username }}"
       failed_when: false
       changed_when: false
-      tags: testing
-
-    - name: Принудительное удаление старой регистрации ВМ (если окружение сбрасывается)
-      # Добавили флаг --nvram, чтобы полностью стереть остатки старого домена
-      command: "virsh undefine {{ username }}-{{ item.path | basename | regex_replace('\\.qcow2$', '') }} --nvram"
-      loop: "{{ found_base_images.files }}"
-      failed_when: false
-      loop_control:
-        label: "{{ username }}-{{ item.path | basename | regex_replace('\\.qcow2$', '') }}"
-      tags: testing
 
     - name: Генерация уникальных XML-конфигураций ВМ из шаблонов для ученика
       template:
-        # Используем надежный регулярный фильтр, который просто отрезает .qcow2 с конца имени
-        src: "templates/{{ item.path | basename | regex_replace('\\.qcow2$', '') }}.xml"
-        dest: "/tmp/{{ username }}-{{ item.path | basename | regex_replace('\\.qcow2$', '') }}.xml"
+        src: 'templates/{{ item.path | basename | regex_replace(".qcow2$", "") }}.xml'
+        dest: '/tmp/{{ item.path | basename | regex_replace(".qcow2$", "") }}.xml'
         owner: root
         group: root
         mode: '0644'
       loop: "{{ found_base_images.files }}"
       loop_control:
-        label: "{{ item.path | basename | regex_replace('\\.qcow2$', '') }}.xml"
-      tags: testing
+        label: "{{ item.path | basename | regex_replace('.qcow2$', '') }}.xml"
+
+    - name: Принудительное удаление старой регистрации ВМ (если окружение сбрасывается)
+      command: 'virsh undefine {{ item.path | basename | regex_replace(".qcow2$", "") }} --nvram'
+      loop: "{{ found_base_images.files }}"
+      failed_when: false
+      loop_control:
+        label: "{{ item.path | basename | regex_replace('.qcow2$', '') }}"
 
     - name: Регистрация (определение) виртуальных машин в гипервизоре Libvirt
-      command: "virsh define /tmp/{{ username }}-{{ item.path | basename | regex_replace('\\.qcow2$', '') }}.xml"
+      command: 'virsh define /tmp/{{ item.path | basename | regex_replace(".qcow2$", "") }}.xml'
       loop: "{{ found_base_images.files }}"
       loop_control:
-        label: "{{ username }}-{{ item.path | basename | regex_replace('\\.qcow2$', '') }}"
-      tags: testing
+        label: "{{ item.path | basename | regex_replace('.qcow2$', '') }}"
 
     - name: Динамическое определение пути к Рабочему столу пользователя
       command: "xdg-user-dir DESKTOP"
-      # Выполняем команду строго от имени созданного ученика
       become_user: "{{ username }}"
       register: xdg_desktop_path
       changed_when: false
       failed_when: false
-      tags: testing
 
     - name: Установка альтернативного пути, если xdg-user-dir не вернул результат
       set_fact:
-        # По умолчанию подставится /Desktop, если утилита ничего не вернула
         final_desktop_path: "{{ xdg_desktop_path.stdout | default('/home/' ~ username ~ '/Desktop') }}"
-      tags: testing
 
     - name: Гарантия существования каталога Рабочего стола
       file:
@@ -206,25 +197,29 @@
         owner: "{{ username }}"
         group: "{{ username }}"
         mode: '0755'
-      tags: testing
 
     - name: Размещение ярлыков запуска для каждой созданной ВМ на Рабочем столе
       template:
         src: templates/shortcut.desktop.tmpl
-        dest: "{{ final_desktop_path }}/run_{{ item.path | basename | regex_replace('\\.qcow2$', '') }}.desktop"
+        dest: '{{ final_desktop_path }}/run_{{ item.path | basename | regex_replace(".qcow2$", "") }}.desktop'
         owner: "{{ username }}"
         group: "{{ username }}"
         mode: '0755'
       vars:
-        # 1. Считываем файл XML как обычный текст
-        xml_content: "{{ lookup('file', 'templates/' ~ (item.path | basename | regex_replace('\\.qcow2$', '')) ~ '.xml') }}"
-        # 2. Ищем текст внутри тегов <title>...</title> с помощью регулярного выражения
-        raw_title: "{{ xml_content | regex_search('<title>(.*?)</title>', '\\1') | first | default('') }}"
-        # 3. Если тег нашли — берем его, если он пуст — подставляем имя файла в качестве подстраховки
-        vm_title: "{{ raw_title if raw_title != '' else (item.path | basename | regex_replace('\\.qcow2$', '')) }}"
+        # 1. Считываем файл XML как текст
+        xml_content: "{{ lookup('file', 'templates/' ~ (item.path | basename | regex_replace('.qcow2$', '')) ~ '.xml') }}"
+        
+        # 2. Пытаемся вырезать всё, что находится между тегами <title>...</title>
+        # Если тег найден, в переменную запишется только текст заголовка. 
+        # Если тега нет, регулярное выражение не сработает, и запишется весь XML-текст целиком.
+        parsed_title: "{{ xml_content | regex_replace('(?s).*<title>(.*?)</title>.*', '\\1') }}"
+        
+        # 3. Делаем проверку: если в parsed_title остался исходный XML-код (начинается с <), 
+        # значит тега <title> не было. В этом случае подставляем чистое имя файла.
+        vm_title: "{{ item.path | basename | regex_replace('.qcow2$', '') if parsed_title.startswith('<') else parsed_title }}"
+        
+        # Имя иконки в точности соответствует имени ВМ
+        vm_icon: '{{ (item.path | basename | regex_replace(".qcow2$", "")) ~ ".png" }}'
       loop: "{{ found_base_images.files }}"
       loop_control:
-        label: "run_{{ item.path | basename | regex_replace('\\.qcow2$', '') }}.desktop"
-      tags: testing
-
-
+        label: "run_{{ item.path | basename | regex_replace('.qcow2$', '') }}.desktop"
