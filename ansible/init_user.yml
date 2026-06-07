@@ -1,5 +1,5 @@
 ---
-- name: Инициализация учетных записей пользователей на рабочих местах УТК-СЗИ
+- name: Инициализация учетных записей обучаемых на рабочих местах УТК-СЗИ
   hosts: "{{ host | default('learners') }}"
   become: true
   vars:
@@ -85,7 +85,7 @@
       no_log: true
       when: user_check.ansible_facts.getent_passwd is not defined
 
-    - name: Рекурсивное создание структуры каталогов .local/libvirt/images
+    - name: Рекурсивное создание структуры каталогов для пользовательского пула
       file:
         path: "{{ user_pool_path }}"
         state: directory

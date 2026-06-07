@@ -5,7 +5,7 @@ learners
 
 # Рабочее место инструктора (Instructor Workstation)
 [instructor]
-iws-01 ansible_host=192.168.1.10
+iws ansible_host=192.168.1.10
 
 # Рабочие места обучаемых (Learner Workstations)
 [learners]

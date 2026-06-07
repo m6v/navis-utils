@@ -1,5 +1,5 @@
 ---
-- name: Развертывание виртуальной инфраструктуры на рабочих местах УТК-СЗИ
+- name: Развертывание виртуальной инфраструктуры (vlab) на рабочих местах УТК-СЗИ
   hosts: class
   become: true
   vars:
@@ -165,8 +165,8 @@
       become: false
       changed_when: false
 
-    - name: Собрка ISO-образа дистрибутивов из папки files/distros
-      # Объединяем сборку ISO и touch в одну задачу через bash, чтобы гарантированно обновить время файла
+    - name: Сборка files/images/distros.iso из файлов в папке files/distros
+      # Объединение сборки ISO и touch в одну задачу через bash, чтобы гарантированно обновить время файла
       shell: >
         genisoimage -input-charset utf-8 -r -J -joliet-long -U -o files/images/distros.iso files/distros &&
         touch files/images/distros.iso
@@ -174,17 +174,9 @@
       become: false
       when: is_distro_changes.stdout != ""
 
-    - name: Синхронизация образов виртуальных машин из локального каталога files/images в дефолтный пул
+    - name: Копирование образов виртуальных машин из files/images в системный пул
       synchronize:
-        src: "files/images/"
-        dest: "{{ system_pool_path }}/"
-        recursive: yes
-        archive: yes
-        delete: yes
-
-    - name: Синхронизация образов виртуальных машин из локального каталога files/images в дефолтный пул
-      synchronize:
-        # Слэш на конце src копирует содержимое каталога, а не сам каталог
+        # Слэш на конце src задает копирование содержимого каталога, а не самого каталога
         src: files/images/
         dest: "{{ system_pool_path }}/"
         recursive: yes
@@ -195,9 +187,9 @@
       command: "virsh pool-refresh {{ system_pool_name }}"
       changed_when: false
 
-    - name: Синхронизация иконок ярлыков из локального каталога files/icons в системный каталог
+    - name: Копирование иконок ярлыков из files/icons в системный каталог
       synchronize:
-        # Слэш на конце src копирует содержимое каталога, а не сам каталог
+        # Слэш на конце src задает копирование содержимого каталога, а не самого каталога
         src: files/icons/
         dest: "/usr/share/pixmaps/"
         recursive: yes
