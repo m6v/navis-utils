@@ -1,0 +1,205 @@
+---
+- name: Развертывание виртуальной инфраструктуры на Astra Linux SE 1.7
+  hosts: class
+  become: true
+  vars:
+    storage_pool_name: "default"
+    storage_pool_path: "/var/lib/libvirt/images"
+    # Имена ваших кастомных учебных сетей
+    classroom_networks:
+      - "intnet"
+      - "extnet"
+
+  # Глобальные переменные окружения для всего плейбука
+  environment:
+    # Менеджеру пакетов apt выполнять установку в абсолютно «глухом» автоматическом режиме и
+    # принудительно отвечать согласием на все всплывающие вопросы
+    DEBIAN_FRONTEND: noninteractive
+    # Явно разрешаем root управлять Libvirt без ограничений
+    LIBVIRT_DEFAULT_URI: "qemu:///system"
+
+  tasks:
+    - name: Генерация SSH-ключа RSA на управляющем компьютере
+      openssh_keypair:
+        path: "~/.ssh/id_rsa"
+        type: rsa
+        # Задаем максимальную стойкость 4096 бит для безопасности
+        size: 4096
+      delegate_to: localhost
+      become: false
+      tags: testing
+
+    - name: Автоматическое добавление SSH-ключа в доверенные на целевые хосты
+      authorized_key:
+        user: administrator
+        key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+        state: present
+      tags: testing
+
+    - name: Удаление старого пакета межсетевого экрана ufw
+      apt:
+        name: ufw
+        state: absent
+        purge: yes
+      tags: testing
+
+    - name: Установка только nftables и rsync (без astra-kvm)
+      apt:
+        name:
+          - nftables
+          - rsync
+        state: present
+        update_cache: yes
+      tags: testing
+
+    - name: Настройка правил межсетевого экрана nftables из шаблона
+      template:
+        src: templates/nftables.conf
+        dest: /etc/nftables.conf
+        owner: root
+        group: root
+        mode: '0644'
+      tags: testing
+
+    - name: Запуск nftables, чтобы он монополизировал подсистему netfilter
+      service:
+        name: nftables
+        state: restarted
+        enabled: yes
+      tags: testing
+
+    - name: Установка метапакета виртуализации astra-kvm
+      apt:
+        name: astra-kvm
+        state: present
+      tags: testing
+
+    - name: Принудительная остановка установившейся службы firewalld
+      service:
+        name: firewalld
+        state: stopped
+      # Игнорируем ошибку, если пакета еще нет в системе
+      failed_when: false
+      tags: testing
+
+    - name: Намертво замаскируем службу firewalld (запрет запуска)
+      systemd:
+        name: firewalld
+        masked: yes
+      tags: testing
+
+    - name: Включение и запуск службы виртуализации libvirtd
+      service:
+        name: libvirtd
+        state: started
+        enabled: yes
+      tags: testing
+
+    - name: Проверяем, существует ли стандартная сеть default
+      command: virsh net-info default
+      register: default_net_check
+      failed_when: false
+      changed_when: false
+      tags: testing
+
+    - name: Полное удаление стандартной сети default из Libvirt
+      command: "{{ item }}"
+      with_items:
+        # Принудительно останавливаем сеть
+        - "virsh net-destroy default"
+        # Удаляем её конфигурацию из системы
+        - "virsh net-undefine default"
+      loop_control:
+        loop_var: item
+      when: default_net_check.rc == 0
+      # Игнорируем ошибки, если она уже была остановлена
+      failed_when: false
+      tags: testing
+
+    - name: Копирование XML-шаблонов сетей (intnet и extnet) на целевые машины
+      template:
+        src: "templates/{{ item }}.xml"
+        dest: "/tmp/{{ item }}.xml"
+      loop: "{{ classroom_networks }}"
+      tags: testing
+
+    - name: Проверка статуса новых сетей в libvirt
+      command: "virsh net-info {{ item }}"
+      register: net_check
+      failed_when: false
+      changed_when: false
+      loop: "{{ classroom_networks }}"
+      tags: testing
+
+    - name: Определение сетей в libvirt (если они отсутствуют)
+      command: "virsh net-define /tmp/{{ item.item }}.xml"
+      loop: "{{ net_check.results }}"
+      when: item.rc != 0
+      tags: testing
+
+    - name: Гарантия запуска учебных сетей
+      command: "virsh net-start {{ item }}"
+      loop: "{{ classroom_networks }}"
+      # Если сеть уже была запущена, virsh выдаст ошибку, которую мы игнорируем
+      failed_when: false
+      tags: testing
+
+    - name: Добавление учебных сетей в автозагрузку гипервизора
+      command: "virsh net-autostart {{ item }}"
+      loop: "{{ classroom_networks }}"
+      failed_when: false
+      tags: testing
+
+    - name: Добавление администратора и root в группы виртуализации Astra Linux
+      user:
+        name: "{{ item }}"
+        groups:
+          - kvm
+          - libvirt
+          - libvirt-admin
+        append: yes
+      loop:
+        - "administrator"
+        - "root"
+      tags: testing
+
+    - name: Определение дефолтного пула в libvirt (через принудительную сессию групп)
+      # Используем sg libvirt -c, чтобы команда virsh пробилась сквозь СЗИ Astra Linux
+      command: "sg libvirt -c 'virsh pool-define-as {{ storage_pool_name }} dir --target {{ storage_pool_path }}'"
+      register: pool_def
+      failed_when: false
+      tags: testing
+
+    - name: Гарантия запуска дефолтного пула хранения
+      command: "sg libvirt -c 'virsh pool-start {{ storage_pool_name }}'"
+      failed_when: false
+      tags: testing
+
+    - name: Добавление дефолтного пула в автозагрузку при старте хоста
+      command: "sg libvirt -c 'virsh pool-autostart {{ storage_pool_name }}'"
+      failed_when: false
+      tags: testing
+
+    - name: Синхронизация образов ВМ из локальной папки files/images в дефолтный пул
+      synchronize:
+        # Слэш на конце src копирует содержимое каталока, а не сам каталог
+        src: files/images/
+        dest: "{{ storage_pool_path }}/"
+        recursive: yes
+        delete: no
+        archive: yes
+      tags: testing
+
+    - name: Обновление пула хранения Libvirt для обнаружения новых файлов
+      command: "virsh pool-refresh {{ storage_pool_name }}"
+      changed_when: false
+
+    - name: Синхронизация иконок ярлыков из локальной папки files/icons в системный каталог
+      synchronize:
+        # Слэш на конце src копирует содержимое напрямую в pixmaps
+        src: files/icons/
+        dest: "/usr/share/pixmaps/"
+        recursive: yes
+        delete: no
+        archive: yes
+      tags: testing
