@@ -27,21 +27,18 @@
         size: 4096
       delegate_to: localhost
       become: false
-      tags: testing
 
     - name: Автоматическое добавление SSH-ключа в доверенные на целевые хосты
       authorized_key:
         user: administrator
         key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
         state: present
-      tags: testing
 
     - name: Удаление межсетевого экрана ufw
       apt:
         name: ufw
         state: absent
         purge: yes
-      tags: testing
 
     - name: Установка дополнительных пакетов (nftables и rsync)
       apt:
@@ -50,7 +47,6 @@
           - rsync
         state: present
         update_cache: yes
-      tags: testing
 
     - name: Настройка правил межсетевого экрана nftables из шаблона
       template:
@@ -59,47 +55,40 @@
         owner: root
         group: root
         mode: '0644'
-      tags: testing
 
     - name: Запуск nftables, чтобы он монополизировал подсистему netfilter
       service:
         name: nftables
         state: restarted
         enabled: yes
-      tags: testing
 
     - name: Установка метапакета виртуализации astra-kvm
       apt:
         name: astra-kvm
         state: present
-      tags: testing
 
     - name: Принудительная остановка службы firewalld, установленной astra-kvm
       service:
         name: firewalld
         state: stopped
       failed_when: false
-      tags: testing
 
     - name: Маскирование (запрет запуска) службы firewalld
       systemd:
         name: firewalld
         masked: yes
-      tags: testing
 
     - name: Включение и запуск службы виртуализации libvirtd
       service:
         name: libvirtd
         state: started
         enabled: yes
-      tags: testing
 
     - name: Проверка наличия сети default
       command: virsh net-info default
       register: default_net_check
       failed_when: false
       changed_when: false
-      tags: testing
 
     - name: Удаление сети default
       command: "{{ item }}"
@@ -113,14 +102,12 @@
       when: default_net_check.rc == 0
       # Игнорируем ошибки, если сеть уже остановлена
       failed_when: false
-      tags: testing
 
     - name: Копирование XML-шаблонов сетей intnet и extnet на целевые машины
       template:
         src: "templates/{{ item }}.xml"
         dest: "/tmp/{{ item }}.xml"
       loop: "{{ classroom_networks }}"
-      tags: testing
 
     - name: Проверка статуса новых сетей в libvirt
       command: "virsh net-info {{ item }}"
@@ -128,26 +115,22 @@
       failed_when: false
       changed_when: false
       loop: "{{ classroom_networks }}"
-      tags: testing
 
     - name: Определение сетей в libvirt (если они отсутствуют)
       command: "virsh net-define /tmp/{{ item.item }}.xml"
       loop: "{{ net_check.results }}"
       when: item.rc != 0
-      tags: testing
 
     - name: Запуск виртуальных сетей
       command: "virsh net-start {{ item }}"
       loop: "{{ classroom_networks }}"
       # Если сеть уже запущена, игнорируем ошибку, которую выдаст virsh
       failed_when: false
-      tags: testing
 
     - name: Добавление виртуальных сетей в автозагрузку гипервизора
       command: "virsh net-autostart {{ item }}"
       loop: "{{ classroom_networks }}"
       failed_when: false
-      tags: testing
 
     - name: Добавление администратора и root в группы виртуализации Astra Linux
       user:
@@ -160,24 +143,20 @@
       loop:
         - "administrator"
         - "root"
-      tags: testing
 
     - name: Определение дефолтного пула в libvirt
       # Принудительное применение (switch group) прав группы libvirt в текущей SSH-сессии без перезапуска системы
       command: "sg libvirt -c 'virsh pool-define-as {{ system_pool_name }} dir --target {{ system_pool_path }}'"
       register: pool_def
       failed_when: false
-      tags: testing
 
     - name: Запуск дефолтного пула хранения
       command: "sg libvirt -c 'virsh pool-start {{ system_pool_name }}'"
       failed_when: false
-      tags: testing
 
     - name: Добавление дефолтного пула в автозагрузку при старте хоста
       command: "sg libvirt -c 'virsh pool-autostart {{ system_pool_name }}'"
       failed_when: false
-      tags: testing
 
     - name: Проверка наличия измененных файлов в каталоге distros
       shell: "find files/distros -type f -newer files/images/distros.iso -print -quit || true"
@@ -211,7 +190,6 @@
         recursive: yes
         delete: no
         archive: yes
-      tags: testing
 
     - name: Обновление пула хранения Libvirt для обнаружения новых файлов
       command: "virsh pool-refresh {{ system_pool_name }}"
@@ -225,4 +203,3 @@
         recursive: yes
         delete: no
         archive: yes
-      tags: testing

@@ -1,19 +1,12 @@
 ---
-- name: Очистка виртуальных машин и ярлыков на рабочем месте обучаемого
+- name: Очистка виртуальных машин и пула обучаемого на рабочем месте УТК-СЗИ
   hosts: "{{ host | default('learners') }}"
   become: true
   vars:
-    # Имя пользователя берется из переданной переменной `user`
     username: "{{ user }}"
-    
-    # Имя персонального пула хранения в Libvirt (совпадает с именем пользователя)
-    pool_name: "{{ user }}"
-    
-    # Путь к персональному каталогу хранения в домашней папке ученика
-    pool_path: "/home/{{ user }}/.local/libvirt/images"
-
-    # Путь к дефолтному пулу, где лежат базовые шаблоны
-    base_images_path: "/var/lib/libvirt/images"
+    user_pool_name: "{{ user }}"
+    user_pool_path: "/home/{{ user }}/.local/libvirt/images"
+    system_pool_path: "/var/lib/libvirt/images"
 
   pre_tasks:
     - name: Валидация входных параметров (наличие host и user)
@@ -29,39 +22,49 @@
       tags: always
 
   tasks:
-    - name: Поиск всех базовых образов qcow2 в системном пуле хранения
+    - name: Поиск файлов оверлейных дисков в пользовательском пуле хранения
       find:
-        paths: "{{ base_images_path }}"
+        paths: "{{ user_pool_path }}"
         patterns: "*.qcow2"
-      register: base_images
+      register: user_images
+      # Не падать с ошибкой, если каталог отсутствует
+      failed_when: false
 
-    - name: Формирование чистого списка имен виртуальных машин для учебного класса
+    - name: Формирование списка имен доменов для удаления
       set_fact:
-        classroom_vms: "{{ base_images.files | map(attribute='path') | map('basename') | map('regex_replace', '\\.qcow2$', '') | list }}"
+        # Извлечение имен доменов на основе файлов с образами дисков в пуле пользователя
+        user_domains: "{{ user_images.files | default([]) | map(attribute='path') | map('basename') | map('regex_replace', '\\.qcow2$', '') | list }}"
 
-    - name: Принудительная остановка ВМ пользователя (если они запущены)
+    - name: Принудительная остановка доменов пользователя (если запущены)
       command: "virsh destroy {{ item }}"
-      loop: "{{ classroom_vms }}"
-      # Игнорируем ошибки, если машины на хосте уже были выключены
+      loop: "{{ user_domains }}"
       failed_when: false
 
-    - name: Полное удаление конфигурации ВМ пользователя из Libvirt
-      # Флаг --nvram зачищает файлы прошивки UEFI, освобождая имена для следующих потоков
+    - name: Полное удаление конфигурации доменов пользователя
       command: "virsh undefine {{ item }} --nvram"
-      loop: "{{ classroom_vms }}"
+      loop: "{{ user_domains }}"
       failed_when: false
 
-    - name: Очистка файлов дисков в персональном пуле хранения ученика
-      # Вычищаем оверлейные диски из домашней директории, но оставляем саму папку
-      shell: "rm -f {{ pool_path }}/*"
-      failed_when: false
-
-    - name: Принудительное обновление пула для фиксации удаления файлов
-      command: "virsh pool-refresh {{ pool_name }}"
+    - name: Проверка, зарегистрирован ли еще персональный пул хранения ученика
+      command: "virsh pool-info {{ user_pool_name }}"
+      register: pool_check
       failed_when: false
       changed_when: false
 
-    - name: Динамическое определение пути к Рабочему столу пользователя
+    - name: Принудительная остановка и удаление пользовательского пула
+      command: "{{ item }}"
+      with_items:
+        - "virsh pool-destroy {{ user_pool_name }}"
+        - "virsh pool-undefine {{ user_pool_name }}"
+      when: pool_check.rc == 0
+      failed_when: false
+
+    - name: Принудительное удаление каталога пула со всеми оверлеями
+      file:
+        path: "{{ user_pool_path }}"
+        state: absent
+
+    - name: Динамическое определение пути к рабочему столу обучаемого
       command: "xdg-user-dir DESKTOP"
       become_user: "{{ username }}"
       register: xdg_desktop_path
@@ -72,9 +75,7 @@
       set_fact:
         final_desktop_path: "{{ xdg_desktop_path.stdout | default('/home/' ~ username ~ '/Desktop') }}"
 
-    - name: Поиск ярлыков на Рабочем столе ученика, содержащих ваш маркер vlab
-      # grep -l возвращает только имена файлов, внутри которых найдена строка
-      # 2>/dev/null страхует от ошибок, если на Рабочем столе вообще пусто
+    - name: Поиск ярлыков на рабочем столе обучаемого, содержащих маркер vlab
       shell: "grep -l 'X-Related-To=vlab' {{ final_desktop_path }}/*.desktop 2>/dev/null"
       register: vlab_shortcuts
       failed_when: false
@@ -84,7 +85,6 @@
       file:
         path: "{{ item }}"
         state: absent
-      # Итерируемся по списку путей, который нам вернул локальный grep внутри виртуалки
       loop: "{{ vlab_shortcuts.stdout_lines }}"
       loop_control:
         label: "{{ item | basename }}"
