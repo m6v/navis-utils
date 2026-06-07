@@ -1,19 +1,19 @@
 ---
-- name: Развертывание виртуальной инфраструктуры на Astra Linux SE 1.7
+- name: Развертывание виртуальной инфраструктуры УТК-СЗИ
   hosts: class
   become: true
   vars:
     storage_pool_name: "default"
     storage_pool_path: "/var/lib/libvirt/images"
-    # Имена ваших кастомных учебных сетей
+    # Имена виртуальных учебных сетей на рабочих местах обучаемых
     classroom_networks:
       - "intnet"
       - "extnet"
 
   # Глобальные переменные окружения для всего плейбука
   environment:
-    # Менеджеру пакетов apt выполнять установку в абсолютно «глухом» автоматическом режиме и
-    # принудительно отвечать согласием на все всплывающие вопросы
+    # Менеджеру apt выполнять установку в полностью автоматическом режиме,
+    # отвечая согласием на все всплывающие вопросы
     DEBIAN_FRONTEND: noninteractive
     # Явно разрешаем root управлять Libvirt без ограничений
     LIBVIRT_DEFAULT_URI: "qemu:///system"
@@ -78,11 +78,10 @@
       service:
         name: firewalld
         state: stopped
-      # Игнорируем ошибку, если пакета еще нет в системе
       failed_when: false
       tags: testing
 
-    - name: Намертво замаскируем службу firewalld (запрет запуска)
+    - name: Маскируем (запрещаем запуск) службу firewalld
       systemd:
         name: firewalld
         masked: yes
@@ -107,16 +106,16 @@
       with_items:
         # Принудительно останавливаем сеть
         - "virsh net-destroy default"
-        # Удаляем её конфигурацию из системы
+        # Удаляем конфигурацию сети системы
         - "virsh net-undefine default"
       loop_control:
         loop_var: item
       when: default_net_check.rc == 0
-      # Игнорируем ошибки, если она уже была остановлена
+      # Игнорируем ошибки, если сеть уже остановлена
       failed_when: false
       tags: testing
 
-    - name: Копирование XML-шаблонов сетей (intnet и extnet) на целевые машины
+    - name: Копирование XML-шаблонов сетей intnet и extnet на целевые машины
       template:
         src: "templates/{{ item }}.xml"
         dest: "/tmp/{{ item }}.xml"
@@ -140,7 +139,7 @@
     - name: Гарантия запуска учебных сетей
       command: "virsh net-start {{ item }}"
       loop: "{{ classroom_networks }}"
-      # Если сеть уже была запущена, virsh выдаст ошибку, которую мы игнорируем
+      # Если сеть уже запущена, игнорируем ошибку, которую выдаст virsh
       failed_when: false
       tags: testing
 
@@ -164,7 +163,7 @@
       tags: testing
 
     - name: Определение дефолтного пула в libvirt (через принудительную сессию групп)
-      # Используем sg libvirt -c, чтобы команда virsh пробилась сквозь СЗИ Astra Linux
+      # Принудительное применение (switch group) прав группы libvirt в текущей SSH-сессии без перезапуска системы
       command: "sg libvirt -c 'virsh pool-define-as {{ storage_pool_name }} dir --target {{ storage_pool_path }}'"
       register: pool_def
       failed_when: false
@@ -182,7 +181,7 @@
 
     - name: Синхронизация образов ВМ из локальной папки files/images в дефолтный пул
       synchronize:
-        # Слэш на конце src копирует содержимое каталока, а не сам каталог
+        # Слэш на конце src копирует содержимое каталога, а не сам каталог
         src: files/images/
         dest: "{{ storage_pool_path }}/"
         recursive: yes
@@ -196,7 +195,7 @@
 
     - name: Синхронизация иконок ярлыков из локальной папки files/icons в системный каталог
       synchronize:
-        # Слэш на конце src копирует содержимое напрямую в pixmaps
+        # Слэш на конце src копирует содержимое каталога, а не сам каталог
         src: files/icons/
         dest: "/usr/share/pixmaps/"
         recursive: yes

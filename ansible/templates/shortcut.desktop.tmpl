@@ -1,12 +1,14 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
+# Имя ярлыка по-прежнему подставляется из красивой переменной vm_title плейбука
 Name={{ vm_title }}
 Comment=Быстрый запуск лабораторной виртуальной машины
-# Убрали {{ username }}- из вызова virsh и virt-manager
-Exec=bash -c "virsh --connect qemu:///system start {{ item.path | basename | regex_replace('\.qcow2$', '') }}; virt-manager --connect qemu:///system --show-domain-console {{ item.path | basename | regex_replace('\.qcow2$', '') }}"
-# Иконка теперь подставляется динамически (например: arm-abi.png)
+# Команда запуска: подставляет чистое имя машины напрямую из цикла (например, arm-abi)
+Exec=bash -c "virsh --connect qemu:///system start {{ item }}; virt-manager --connect qemu:///system --show-domain-console {{ item }}"
+# Иконка подставляется из локальной переменной vm_icon (например, arm-abi.png)
 Icon={{ vm_icon }}
 Terminal=false
 StartupNotify=true
-Categories=Development;
+Categories=System;Emulator;
+X-Related-To=vlab
