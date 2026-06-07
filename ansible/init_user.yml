@@ -1,0 +1,113 @@
+---
+- name: Управление учетными записями обучаемых на Astra Linux SE 1.7
+  hosts: "{{ host | default('learners') }}"
+  become: true
+  vars:
+    # Имя пользователя берется из переданной переменной `user`
+    username: "{{ user }}"
+    
+    # Путь к персональному каталогу хранения в домашней папке ученика
+    pool_path: "/home/{{ user }}/.local/libvirt/images"
+
+    # Пароль по умолчанию в чистом виде
+    plain_password: "11111111"
+
+  pre_tasks:
+    - name: Валидация входных параметров (наличие host и user)
+      fail:
+        msg: "Ошибка! Вы должны передать параметры host и user. Пример: -e 'host=lws-01 user=ivanov'"
+      when: (user is not defined) or (host is not defined)
+
+    - name: Проверка, что указанный хост существует в файле инвентаря
+      fail:
+        msg: "Ошибка! Хост '{{ host }}' не найден в вашем файле инвентаря. Проверьте правильность написания."
+      when: host not in groups['all']
+
+  tasks:
+    - name: Проверка, существует ли уже обучаемый в операционной системе
+      getent:
+        database: passwd
+        key: "{{ username }}"
+      register: user_check
+      failed_when: false
+      changed_when: false
+
+    - name: Логирование статуса пользователя
+      debug:
+        msg: "Пользователь {{ username }} уже создан. Пропускаем создание."
+      when: user_check.rc == 0
+
+    - name: Создание учетной записи обучаемого (с ГОСТ-хэшированием пароля)
+      user:
+        name: "{{ username }}"
+        # Группы виртуализации Astra Linux SE (без группы sudo)
+        groups:
+          - kvm
+          - libvirt
+          - libvirt-qemu
+          - libvirt-admin
+        append: yes
+        shell: /bin/bash
+        # Хешируем пароль по стандарту ГОСТ Р 34.11-2012 силами СЗИ Astra Linux
+        password: "{{ plain_password | password_hash('gost12_512') }}"
+        state: present
+        create_home: yes
+      when: user_check.rc != 0
+
+    - name: Рекурсивное создание структуры каталогов .local/libvirt/images
+      file:
+        path: "{{ pool_path }}"
+        state: directory
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        # Права 711 позволяют системному демону libvirt заходить внутрь папки
+        mode: '0711'
+
+    - name: Проверка, зарегистрирован ли пул хранения с именем ученика в libvirt
+      command: virsh pool-info {{ username }}
+      register: pool_check
+      failed_when: false
+      changed_when: false
+
+    - name: Регистрация, запуск и добавление персонального пула в автозагрузку
+      command: "{{ item }}"
+      with_items:
+        - "virsh pool-define-as {{ username }} dir --target {{ pool_path }}"
+        - "virsh pool-start {{ username }}"
+        - "virsh pool-autostart {{ username }}"
+      when: pool_check.rc != 0
+
+    - name: Принудительное обновление пула для фиксации прав
+      command: "virsh pool-refresh {{ username }}"
+      failed_when: false
+      changed_when: false
+
+    - name: Динамическое определение пути к Рабочему столу пользователя
+      command: "xdg-user-dir DESKTOP"
+      # Выполняем команду строго от имени созданного ученика
+      become_user: "{{ username }}"
+      register: xdg_desktop_path
+      changed_when: false
+      failed_when: false
+
+    - name: Установка альтернативного пути, если xdg-user-dir не вернул результат
+      set_fact:
+        # По умолчанию подставится /Desktop, если утилита ничего не вернула
+        final_desktop_path: "{{ xdg_desktop_path.stdout | default('/home/' ~ username ~ '/Desktop') }}"
+
+    - name: Гарантия существования каталога Рабочего стола
+      file:
+        path: "{{ final_desktop_path }}"
+        state: directory
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: '0755'
+
+    - name: Размещение ярлыка запуска ВМ на Рабочем столе ученика
+      template:
+        src: templates/vm_launcher.desktop
+        dest: "{{ final_desktop_path }}/run_vm.desktop"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        # Права 0755 обязательны для графической оболочки Fly
+        mode: '0755'

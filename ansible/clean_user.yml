@@ -1,0 +1,57 @@
+---
+- name: Очистка виртуальных машин обучаемого на Astra Linux SE 1.7
+  hosts: "{{ host | default('learners') }}"
+  become: true
+  vars:
+    # Имя пользователя берется из переданной переменной `user`
+    learner_username: "{{ user }}"
+    
+    # Путь к персональному каталогу хранения в домашней папке ученика
+    learner_pool_path: "/home/{{ user }}/.local/libvirt/images"
+
+  pre_tasks:
+    - name: Валидация входных параметров (наличие host и user)
+      fail:
+        msg: "Ошибка! Вы должны передать параметры host и user. Пример: -e 'host=lws-01 user=ivanov'"
+      when: (user is not defined) or (host is not defined)
+
+    - name: Проверка, что указанный хост существует в файле инвентаря
+      fail:
+        msg: "Ошибка! Хост '{{ host }}' не найден в вашем файле инвентаря. Проверьте правильность написания."
+      when: host not in groups['all']
+
+  tasks:
+    - name: Получение списка всех запущенных и остановленных ВМ на хосте
+      command: "virsh list --all --name"
+      register: all_vms
+      changed_when: false
+
+    - name: Принудительная остановка ВМ пользователя (если они запущены)
+      # Фильтруем список машин: ищем те, которые начинаются с имени пользователя (например, petrov-vm)
+      command: "virsh destroy {{ item }}"
+      loop: "{{ all_vms.stdout_lines }}"
+      when: 
+        - item is string
+        - item.startswith(learner_username ~ '-') or item == learner_username
+      # Игнорируем ошибки, если машина уже была остановлена
+      failed_when: false
+
+    - name: Полное удаление конфигурации ВМ пользователя из Libvirt
+      command: "virsh undefine {{ item }} --remove-all-storage"
+      loop: "{{ all_vms.stdout_lines }}"
+      when: 
+        - item is string
+        - item.startswith(learner_username ~ '-') or item == learner_username
+      failed_when: false
+
+    - name: Очистка остаточных файлов дисков в персональном пуле хранения ученика
+      # Очищаем только содержимое папки, удаляя старые qcow2/img файлы, но оставляя саму директорию
+      shell: "rm -rf {{ learner_pool_path }}/*"
+      # Выполняем только если папка физически существует
+      args:
+        removes: "{{ learner_pool_path }}"
+
+    - name: Принудительное обновление пула Libvirt для фиксации удаления файлов
+      command: "virsh pool-refresh {{ learner_username }}"
+      failed_when: false
+      changed_when: false

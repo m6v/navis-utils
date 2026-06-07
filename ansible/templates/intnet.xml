@@ -1,0 +1,4 @@
+<network>
+  <name>intnet</name>
+  <bridge name='virbr0'/>
+</network>
