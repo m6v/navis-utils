@@ -1,0 +1,74 @@
+---
+- name: Создание учетной записи обучаемого
+  hosts: "{{ host | default('learners') }}"
+  become: true
+
+  pre_tasks:
+    - name: Валидация входных параметров (наличие host и user)
+      fail:
+        msg: "Ошибка! Не задан параметр host и/или user. Пример: -e 'host=lws-01 user=ivanov'"
+      when: (user is not defined) or (host is not defined)
+      tags: always
+
+    - name: Проверка, что указанный хост существует в файле инвентаря
+      fail:
+        msg: "Ошибка! Хост '{{ host }}' не найден в вашем файле инвентаря"
+      when: host not in groups['all']
+
+  tasks:
+    - name: Проверка наличия учетной записи обучаемого на целевом хосте
+      getent:
+        database: passwd
+        key: "{{ username }}"
+      register: user_check
+      failed_when: false
+      changed_when: false
+
+    - name: Логирование статуса пользователя
+      debug:
+        msg: "Пользователь {{ username }} создан, пропускаем создание и ввод пароля"
+      when: user_check.ansible_facts.getent_passwd is defined
+
+    - name: Интерактивный запрос пароля для нового ученика
+      pause:
+        prompt: "Введите пароль пользователя {{ inventory_hostname }}"
+        echo: false
+      register: password_input
+      delegate_to: localhost
+      become: false
+      when: hostvars[inventory_hostname].user_check.ansible_facts.getent_passwd is not defined
+
+    - name: Интерактивный запрос подтверждения пароля
+      pause:
+        prompt: "Повторите пароль для подтверждения"
+        echo: false
+      register: password_confirm
+      delegate_to: localhost
+      become: false
+      when: hostvars[inventory_hostname].user_check.ansible_facts.getent_passwd is not defined
+
+    - name: Проверка совпадения введенных паролей
+      fail:
+        msg: "Ошибка! Введенные пароли не совпадают. Перезапустите плейбук."
+      when: 
+        - hostvars[inventory_hostname].user_check.ansible_facts.getent_passwd is not defined
+        - password_input.user_input != password_confirm.user_input
+
+    - name: Создание учетной записи обучаемого
+      user:
+        name: "{{ username }}"
+        groups:
+          - kvm
+          - libvirt
+          - libvirt-qemu
+          - libvirt-admin
+        append: yes
+        shell: /bin/bash
+        state: present
+        create_home: yes
+      when: user_check.ansible_facts.getent_passwd is not defined
+
+    - name: Установка пароля учетной записи обучаемого
+      shell: "echo '{{ username }}:{{ password_input.user_input }}' | chpasswd"
+      no_log: true
+      when: user_check.ansible_facts.getent_passwd is not defined

@@ -6,7 +6,7 @@
     system_pool_name: "default"
     system_pool_path: "/var/lib/libvirt/images"
     # Имена виртуальных учебных сетей на рабочих местах обучаемых
-    classroom_networks:
+    virtual_networks:
       - "intnet"
       - "extnet"
 
@@ -107,14 +107,14 @@
       template:
         src: "templates/{{ item }}.xml"
         dest: "/tmp/{{ item }}.xml"
-      loop: "{{ classroom_networks }}"
+      loop: "{{ virtual_networks }}"
 
     - name: Проверка статуса новых сетей в libvirt
       command: "virsh net-info {{ item }}"
       register: net_check
       failed_when: false
       changed_when: false
-      loop: "{{ classroom_networks }}"
+      loop: "{{ virtual_networks }}"
 
     - name: Определение сетей в libvirt (если они отсутствуют)
       command: "virsh net-define /tmp/{{ item.item }}.xml"
@@ -123,13 +123,13 @@
 
     - name: Запуск виртуальных сетей
       command: "virsh net-start {{ item }}"
-      loop: "{{ classroom_networks }}"
+      loop: "{{ virtual_networks }}"
       # Если сеть уже запущена, игнорируем ошибку, которую выдаст virsh
       failed_when: false
 
     - name: Добавление виртуальных сетей в автозагрузку гипервизора
       command: "virsh net-autostart {{ item }}"
-      loop: "{{ classroom_networks }}"
+      loop: "{{ virtual_networks }}"
       failed_when: false
 
     - name: Добавление администратора и root в группы виртуализации Astra Linux

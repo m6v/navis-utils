@@ -1,0 +1,12 @@
+---
+# Имя пользователя взять из переданной переменной `user`
+username: "{{ user }}"
+
+# Имя пользовательского пула хранения в Libvirt
+user_pool_name: "{{ user }}"
+
+# Путь к пользовательскому каталогу хранения
+user_pool_path: "/home/{{ user }}/.local/libvirt/images"
+
+# Путь к дефолтному пулу с базовыми шаблонами
+system_pool_path: "/var/lib/libvirt/images"
