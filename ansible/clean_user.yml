@@ -1,7 +1,4 @@
 ---
-- name: Динамическая инициализация переменных
-  import_playbook: init.yml
-  
 - name: Удаление виртуальных машин и пользовательского пула
   import_playbook: destroy_user_pool.yml
 

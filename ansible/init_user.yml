@@ -1,7 +1,4 @@
 ---
-- name: Динамическая инициализация переменных
-  import_playbook: init.yml
-
 - name: Создание учетной записи обучаемого
   import_playbook: create_user.yml
 

@@ -19,14 +19,14 @@
     - name: Проверка наличия учетной записи обучаемого на целевом хосте
       getent:
         database: passwd
-        key: "{{ username }}"
+        key: "{{ user }}"
       register: user_check
       failed_when: false
       changed_when: false
 
     - name: Логирование статуса пользователя
       debug:
-        msg: "Пользователь {{ username }} создан, пропускаем создание и ввод пароля"
+        msg: "Пользователь {{ user }} создан, пропускаем создание и ввод пароля"
       when: user_check.ansible_facts.getent_passwd is defined
 
     - name: Интерактивный запрос пароля для нового ученика
@@ -56,7 +56,7 @@
 
     - name: Создание учетной записи обучаемого
       user:
-        name: "{{ username }}"
+        name: "{{ user }}"
         groups:
           - kvm
           - libvirt
@@ -69,6 +69,6 @@
       when: user_check.ansible_facts.getent_passwd is not defined
 
     - name: Установка пароля учетной записи обучаемого
-      shell: "echo '{{ username }}:{{ password_input.user_input }}' | chpasswd"
+      shell: "echo '{{ user }}:{{ password_input.user_input }}' | chpasswd"
       no_log: true
       when: user_check.ansible_facts.getent_passwd is not defined
