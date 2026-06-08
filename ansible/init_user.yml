@@ -1,9 +1,9 @@
 ---
+- name: Динамическая инициализация переменных
+  import_playbook: init.yml
+
 - name: Создание учетной записи обучаемого
   import_playbook: create_user.yml
 
-- name: Создание пользовательского пула
+- name: Создание пользовательского пула и виртуальных машин
   import_playbook: define_user_pool.yml
-
-- name: Создание ярлыков запуска виртуальных машин
-  import_playbook: create_domain_shortcuts.yml

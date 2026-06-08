@@ -1,5 +1,8 @@
 ---
-- name: Создание пользовательского пула
+- name: Динамическая инициализация переменных
+  import_playbook: init.yml
+  
+- name: Создание пользовательского пула и виртуальных машин
   hosts: "{{ host | default('learners') }}"
   become: true
 
@@ -37,7 +40,7 @@
         patterns: "*.qcow2"
       register: base_images
 
-    - name: Формирование списка имен виртуальных машин для учебного класса
+    - name: Формирование списка имен виртуальных машин
       set_fact:
         user_domains: "{{ base_images.files | map(attribute='path') | map('basename') | map('regex_replace', '\\.qcow2$', '') | list }}"
 
@@ -72,11 +75,24 @@
         mode: '0644'
       loop: "{{ user_domains }}"
 
-    - name: Принудительное удаление виртуальных машин
+    - name: Принудительное удаление старых виртуальных машин
       command: "virsh undefine {{ item }} --nvram"
       loop: "{{ user_domains }}"
       failed_when: false
 
-    - name: Регистрация (определение) виртуальных машин
+    - name: Регистрация (определение) новых виртуальных машин
       command: "virsh define /tmp/{{ item }}.xml"
+      loop: "{{ user_domains }}"
+
+    - name: Создание ярлыков запуска виртуальных машин на рабочем столе
+      template:
+        src: templates/shortcut.desktop.tmpl
+        dest: "{{ desktop_path }}/run_{{ item }}.desktop"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: '0755'
+      vars:
+        # Если регулярный поиск не нашёл тег <title>, default(item, true) подставит имя виртуальной машины
+        vm_title: "{{ lookup('file', 'templates/' ~ item ~ '.xml') | regex_search('<title>(.*?)</title>', '\\1') | first | default(item, true) }}"
+        vm_icon: "{{ item }}.png"
       loop: "{{ user_domains }}"
