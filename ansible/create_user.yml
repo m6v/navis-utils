@@ -1,6 +1,6 @@
 ---
-- name: Создание учетной записи обучаемого
-  hosts: "{{ host | default('learners') }}"
+- name: Управление учетной записью обучаемого
+  hosts: "{{ host }}"
   become: true
 
   pre_tasks:
@@ -16,27 +16,29 @@
       when: host not in groups['all']
 
   tasks:
-    - name: Проверка наличия учетной записи обучаемого на целевом хосте
-      getent:
+    - name: Получение данных о пользователе из passwd
+      ansible.builtin.getent:
         database: passwd
         key: "{{ user }}"
-      register: user_check
-      failed_when: false
-      changed_when: false
+        fail_key: false
 
-    - name: Логирование статуса пользователя
-      debug:
-        msg: "Пользователь {{ user }} создан, пропускаем создание и ввод пароля"
-      when: user_check.ansible_facts.getent_passwd is defined
+    - name: Создание переменной is_user_exist
+      ansible.builtin.set_fact:
+        is_user_exist: "{{ getent_passwd[user] is defined and getent_passwd[user] is sequence }}"
+
+    - name: Гарантировать наличие первичной группы learners в системе
+      ansible.builtin.group:
+        name: learners
+        state: present
 
     - name: Интерактивный запрос пароля для нового ученика
       pause:
-        prompt: "Введите пароль пользователя {{ inventory_hostname }}"
+        prompt: "Введите пароль для создания пользователя {{ user }} на хосте {{ inventory_hostname }}"
         echo: false
       register: password_input
       delegate_to: localhost
       become: false
-      when: hostvars[inventory_hostname].user_check.ansible_facts.getent_passwd is not defined
+      when: not is_user_exist
 
     - name: Интерактивный запрос подтверждения пароля
       pause:
@@ -45,18 +47,19 @@
       register: password_confirm
       delegate_to: localhost
       become: false
-      when: hostvars[inventory_hostname].user_check.ansible_facts.getent_passwd is not defined
+      when: not is_user_exist
 
     - name: Проверка совпадения введенных паролей
       fail:
-        msg: "Ошибка! Введенные пароли не совпадают. Перезапустите плейбук."
+        msg: "Ошибка! Введенные пароли не совпадают. Перезапустите плейбук"
       when: 
-        - hostvars[inventory_hostname].user_check.ansible_facts.getent_passwd is not defined
+        - not is_user_exist
         - password_input.user_input != password_confirm.user_input
 
-    - name: Создание учетной записи обучаемого
+    - name: Создание новой учетной записи или обновление параметров существующей
       user:
         name: "{{ user }}"
+        group: learners
         groups:
           - kvm
           - libvirt
@@ -66,9 +69,8 @@
         shell: /bin/bash
         state: present
         create_home: yes
-      when: user_check.ansible_facts.getent_passwd is not defined
 
-    - name: Установка пароля учетной записи обучаемого
+    - name: Установка пароля для новой учетной записи
       shell: "echo '{{ user }}:{{ password_input.user_input }}' | chpasswd"
       no_log: true
-      when: user_check.ansible_facts.getent_passwd is not defined
+      when: not is_user_exist

@@ -1,6 +1,6 @@
 ---
-- name: Развертывание виртуальной инфраструктуры (vlab) на рабочих местах УТК-СЗИ
-  hosts: class
+- name: Развертывание виртуальной инфраструктуры на рабочих местах УТК-СЗИ
+  hosts: "{{ host | default('class') }}"
   become: true
   vars:
     system_pool_name: "default"

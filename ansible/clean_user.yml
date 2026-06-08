@@ -1,4 +1,0 @@
----
-- name: Удаление виртуальных машин и пользовательского пула
-  import_playbook: destroy_user_pool.yml
-

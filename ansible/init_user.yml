@@ -1,6 +1,0 @@
----
-- name: Создание учетной записи обучаемого
-  import_playbook: create_user.yml
-
-- name: Создание пользовательского пула и виртуальных машин
-  import_playbook: define_user_pool.yml
