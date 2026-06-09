@@ -1,0 +1,28 @@
+---
+- name: Проверка входных параметров
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Проверка, что указанный хост или группа существуют в инвентаре
+      fail:
+        msg: "Ошибка! Хост или группа '{{ host }}' не найдены в вашем файле инвентаря."
+      when: (host is defined) and (host not in groups and host not in groups['all'])
+
+- name: Получение списка зарегистрированных обучаемых
+  hosts: "{{ host | default('class') }}"
+  become: false
+  gather_facts: false
+
+  tasks:
+    - name: Поиск пользователей группы learners
+      shell: |
+        GID=$(getent group learners | cut -d: -f3);
+        [ -n "$GID" ] && getent passwd | awk -F: -v gid="$GID" '$4 == gid {print $1}' | paste -sd, - || echo ""
+      register: grep_output
+      changed_when: false
+
+    - name: Вывод списка пользователей в консоль
+      debug:
+        msg: >-
+          На хосте '{{ inventory_hostname }}' обнаружены обучаемые:
+          {{ grep_output.stdout if grep_output.stdout != '' else 'Пользователи не найдены' }}
