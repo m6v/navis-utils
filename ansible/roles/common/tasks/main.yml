@@ -1,17 +1,21 @@
 ---
 - name: Генерация SSH-ключа RSA на управляющем компьютере
-  openssh_keypair:
+  stat:
     path: "~/.ssh/id_rsa"
-    type: rsa
-    # Максимальная стойкость 4096 бит для безопасности
-    size: 4096
+  register: rsa
   delegate_to: localhost
   become: false
+
+- name: Генерация SSH-ключа RSA на управляющем компьютере (если его нет)
+  shell: "ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ''"
+  delegate_to: localhost
+  become: false
+  when: not rsa.stat.exists
 
 - name: Автоматическое добавление SSH-ключа в доверенные на целевые хосты
   authorized_key:
     user: administrator
-    key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_rsa.pub') }}"
     state: present
 
 - name: Установка дополнительных пакетов (nftables и rsync)

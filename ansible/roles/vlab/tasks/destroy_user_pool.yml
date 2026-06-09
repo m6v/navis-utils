@@ -42,7 +42,9 @@
     state: absent
 
 - name: Определение пути к рабочему столу обучаемого
+  # При выполнении задачи будет предупреждение, это нормально!
   command: "xdg-user-dir DESKTOP"
+  become: true
   become_user: "{{ user }}"
   register: xdg_desktop_path
   changed_when: false

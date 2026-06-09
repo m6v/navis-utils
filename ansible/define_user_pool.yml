@@ -4,12 +4,12 @@
   gather_facts: false
   tasks:
     - name: Валидация входных параметров (наличие host и user)
-      ansible.builtin.fail:
+      fail:
         msg: "Ошибка! Вы должны передать параметры host и user. Пример: -e 'host=lws-01 user=ivanov'"
       when: (user is not defined) or (host is not defined)
 
     - name: Проверка, что указанный хост существует в файле инвентаря
-      ansible.builtin.fail:
+      fail:
         msg: "Ошибка! Хост '{{ host }}' не найден в вашем файле инвентаря. Проверьте правильность написания."
       # Проверка выполнится, только если хост вообще был передан, чтобы не вызвать ошибку синтаксиса
       when: (host is defined) and (host not in groups['all'])

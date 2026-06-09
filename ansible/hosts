@@ -9,8 +9,9 @@ iws ansible_host=192.168.1.10
 
 # Рабочие места обучаемых (Learner Workstations)
 [learners]
-lws-[01:10] ansible_host=192.168.1.[11:20]
-# lws-01 ansible_host=192.168.1.11
+# Старая версия ansible на Astra Linux 1.7 не умеет раскрывать скобки
+# lws-[01:10] ansible_host=192.168.1.[11:20]
+lws-01 ansible_host=192.168.1.11
 
 # Общие переменные для всех хостов
 [all:vars]

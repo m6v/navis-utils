@@ -17,17 +17,17 @@
       when: host not in groups['all']
 
     - name: Проверка наличия пользователя на целевом хосте
-      ansible.builtin.getent:
+      getent:
         database: passwd
         key: "{{ user }}"
         fail_key: false
 
     - name: Фиксация факта существования пользователя
-      ansible.builtin.set_fact:
+      set_fact:
         is_user_exist: "{{ getent_passwd[user] is defined and getent_passwd[user] is sequence }}"
 
     - name: Интерактивный запрос пароля для нового ученика
-      ansible.builtin.pause:
+      pause:
         prompt: "Введите пароль для создания пользователя {{ user }} на хосте {{ inventory_hostname }}"
         echo: false
       register: password_input
@@ -37,7 +37,7 @@
       when: not is_user_exist
 
     - name: Интерактивный запрос подтверждения пароля
-      ansible.builtin.pause:
+      pause:
         prompt: "Повторите пароль для подтверждения"
         echo: false
       register: password_confirm
@@ -47,7 +47,7 @@
       when: not is_user_exist
 
     - name: Проверка совпадения введенных паролей
-      ansible.builtin.fail:
+      fail:
         msg: "Ошибка! Введенные пароли не совпадают. Перезапустите плейбук"
       when: 
         - not is_user_exist

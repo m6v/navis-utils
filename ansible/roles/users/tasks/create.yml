@@ -1,6 +1,6 @@
 ---
 - name: Создание первичной группы learners в системе
-  ansible.builtin.group:
+  group:
     name: learners
     state: present
 

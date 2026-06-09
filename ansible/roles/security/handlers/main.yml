@@ -1,6 +1,6 @@
 ---
 # NB! Имя в строке должно совпадать с тем, что написано в notify
 - name: Перезапуск nftables
-  ansible.builtin.service:
+  service:
     name: nftables
     state: restarted
