@@ -1,73 +1,112 @@
 #!/usr/bin/env bash
 
-# Скрипт-обертка vlab для управления виртуальной лабораторией учебного класса
+# Финальный функциональный код обертки Ansible
+set -euo pipefail
 
-# Прерывать выполнение при любой критической ошибке
-set -e
+TITLE="Панель управления виртуальным полигоном"
+INVENTORY_FILE="hosts"
+HINT="Управление: [Стрелки] - движение, [Tab] - кнопки, [Enter] - выбор"
 
-usage() {
-    echo "Использование:"
-    echo "  $0 --init_class                             - Развертывание базовой инфраструктуры класса"
-    echo "  $0 --init_user --user <имя> --host <хост>   - Создание рабочего места ученика"
-    echo "  $0 --clean_user --user <имя> --host <хост>  - Очистка рабочего места ученика"
+# Проверка наличия файла инвентаря
+if [ ! -f "$INVENTORY_FILE" ]; then
+    whiptail --title "Ошибка" --msgbox "Файл инвентаря '$INVENTORY_FILE' не найден!" 8 55
     exit 1
-}
-
-ACTION=""
-USER_NAME=""
-HOST_NAME=""
-
-# Разбор аргументов командной строки
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --init_class|--init_user|--clean_user)
-            if [[ -n "$ACTION" ]]; then
-                echo "Ошибка: Можно указать только одно основное действие --init_class, --init_user или --clean_user"
-                exit 1
-            fi
-            # Убрать ведущие дефисы
-            ACTION="${1#--}"
-            shift
-            ;;
-        --user)
-            USER_NAME="$2"
-            shift 2
-            ;;
-        --host)
-            HOST_NAME="$2"
-            shift 2
-            ;;
-        -h|--help)
-            usage
-            ;;
-        *)
-            echo "Ошибка: Неизвестный параметр $1"
-            usage
-            ;;
-    esac
-done
-
-# Валидация выбранного действия
-if [[ -z "$ACTION" ]]; then
-    echo "Ошибка: Не указано действие"
-    usage
 fi
 
-# Выполнение логики в зависимости от действия
-case "$ACTION" in
-    init_class)
-        echo "[vlab] Запуск развертывания инфраструктуры класса..."
-        ansible-playbook init_class.yml
-        ;;
-        
-    init_user|clean_user)
-        # Проверка обязательных параметров для работы с пользователями
-        if [[ -z "$USER_NAME" ]] || [[ -z "$HOST_NAME" ]]; then
-            echo "Ошибка: Для действия --$ACTION обязательны параметры --user и --host"
-            usage
-        fi
-        
-        echo "[vlab] Запуск сценария $ACTION для пользователя $USER_NAME на хосте $HOST_NAME..."
-        ansible-playbook "${ACTION}.yml" -e "host=${HOST_NAME} user=${USER_NAME}"
-        ;;
-esac
+# Кэш сессии для хранения параметров
+last_user="" host="" user=""
+
+# Список плейбуков (Индекс массива строго совпадает с номером пункта меню)
+PLAYBOOKS=(
+    "" # Нулевой индекс пропускаем, так как меню начинается с 1
+    "init_vlab.yml"        # 1
+    "create_user.yml"      # 2
+    "delete_user.yml"      # 3
+    "define_user_pool.yml" # 4
+    "destroy_user_pool.yml" # 5
+)
+
+# Функция выбора хоста из инвентаря
+select_host_from_inventory() {
+    local mode=$1
+    local menu_options=()
+    [ "$mode" = "show_all" ] && menu_options+=("ALL" "Все хосты класса")
+
+    while read -r name ip; do
+        [ ! -z "$name" ] && [ ! -z "$ip" ] && menu_options+=("$name" "$ip")
+    done < <(awk -F'[ =]' '$2 == "ansible_host" { print $1, $3 }' "$INVENTORY_FILE")
+
+    host=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Выбрать" --cancel-button "Назад" --menu "Выберите целевой хост:" 18 65 10 "${menu_options[@]}" 3>&1 1>&2 2>&3) || return 1
+    [ -z "$host" ] && return 1 || return 0
+}
+
+# Функция для запроса имени пользователя
+prompt_user_name() {
+    user=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Ввод" --cancel-button "Назад" --inputbox "Введите имя пользователя:" 10 55 "$last_user" 3>&1 1>&2 2>&3) || return 1
+    [ -z "$user" ] && return 1 || { last_user="$user"; return 0; }
+}
+
+# Оптимизированная функция запуска Ansible
+run_ansible() {
+    local playbook=$1
+    local current_user=$2
+    local extra_vars=""
+
+    clear
+    
+    # Шаг 1: Если выбран конкретный хост (не ALL), добавляем его в параметры
+    [ "$host" != "ALL" ] && extra_vars="host=$host"
+    
+    # Шаг 2: Если передан пользователь (строка не пустая), добавляем его через пробел
+    if [ -n "$current_user" ]; then
+        [ -n "$extra_vars" ] && extra_vars="$extra_vars user=$current_user" || extra_vars="user=$current_user"
+    fi
+
+    # Шаг 3: Безопасный запуск. Если extra_vars пуст, ключ -e не подставится вовсе
+    ansible-playbook "$playbook" ${extra_vars:+-e "$extra_vars"} || true
+    
+    read -n 1 -s -r -p "Нажмите любую клавишу..."
+}
+
+# Главный цикл панели управления
+while true; do
+    choice=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Выбрать" --cancel-button "Выход" --menu "Выберите действие:" 15 65 5 \
+        "1" "Инициализировать рабочее место" \
+        "2" "Создать учетную запись пользователя" \
+        "3" "Удалить учетную запись и пул виртуальных машин" \
+        "4" "Создать пул виртуальных машин для пользователя" \
+        "5" "Уничтожить пул виртуальных машин пользователя" 3>&1 1>&2 2>&3)
+
+    if [ $? -ne 0 ] || [ -z "$choice" ]; then
+        clear
+        exit 0
+    fi
+
+    # Считываем имя плейбука по индексу выбранного пункта меню
+    playbook="${PLAYBOOKS[$choice]}"
+    
+    # Интеллектуальное определение логики на основе имени плейбука
+    if [[ "$playbook" == *"user"* ]]; then
+        need_user=true
+        inv_mode="hide_all"
+    else
+        need_user=false
+        inv_mode="show_all"
+    fi
+
+    # Конвейер шагов интерфейса
+    select_host_from_inventory "$inv_mode" || continue
+    [ "$need_user" = true ] && { prompt_user_name || continue; }
+
+    # Индивидуальное исключение для подтверждения удаления (пункт 3)
+    if [ "$choice" -eq 3 ]; then
+        whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user' на хосте '$host'?" 10 60 || continue
+    fi
+
+    # Запуск сценария с передачей имени пользователя или пустой строки
+    if [ "$need_user" = true ]; then
+        run_ansible "$playbook" "$user"
+    else
+        run_ansible "$playbook" ""
+    fi
+done

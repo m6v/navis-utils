@@ -26,7 +26,7 @@
       set_fact:
         is_user_exist: "{{ getent_passwd[user] is defined and getent_passwd[user] is sequence }}"
 
-    - name: Интерактивный запрос пароля для нового ученика
+    - name: Интерактивный запрос пароля для нового обучаемого
       pause:
         prompt: "Введите пароль для создания пользователя {{ user }} на хосте {{ inventory_hostname }}"
         echo: false

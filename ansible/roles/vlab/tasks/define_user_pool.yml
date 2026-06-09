@@ -1,6 +1,6 @@
 ---
-# Если вместо общая для всех обучаемых группа learners создаваться не будет,
-# то здесь и в последующих задачаз использовать парамерт group: "{{ user }}"
+# Если общая для всех обучаемых группа learners создаваться не будет,
+# то здесь и в последующих задач использовать парамерт group: "{{ user }}"
 - name: Рекурсивное создание структуры каталогов для пользовательского пула
   file:
     path: "{{ user_pool_path }}"
@@ -28,13 +28,13 @@
   failed_when: false
   changed_when: false
 
-- name: Поиск всех базовых образов qcow2 в системном пуле хранения
+- name: Поиск базовых образов qcow2 в системном пуле хранения
   find:
     paths: "{{ system_pool_path }}"
     patterns: "*.qcow2"
   register: base_images
 
-- name: Формирование списка имен виртуальных машин
+- name: Формирование списка из имен виртуальных машин
   set_fact:
     user_domains: "{{ base_images.files | map(attribute='path') | map('basename') | map('regex_replace', '\\.qcow2$', '') | list }}"
 
