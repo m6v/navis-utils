@@ -1,0 +1,7 @@
+---
+- name: Установка действия по умолчанию
+  ansible.builtin.set_fact:
+    vlab_action: "{{ vlab_action | default('deploy_vlab') }}"
+
+- name: Маршрутизация задач роли vlab
+  ansible.builtin.include_tasks: "{{ vlab_action }}.yml"

@@ -1,76 +1,61 @@
 ---
-- name: Управление учетной записью обучаемого
+- name: Оркестрация создания учетной записи обучаемого
   hosts: "{{ host }}"
   become: true
 
+  # Сначала проверяем ввод и спрашиваем пароли на localhost
   pre_tasks:
     - name: Валидация входных параметров (наличие host и user)
       fail:
         msg: "Ошибка! Не задан параметр host и/или user. Пример: -e 'host=lws-01 user=ivanov'"
       when: (user is not defined) or (host is not defined)
-      tags: always
+      run_once: true # Достаточно проверить один раз, а не для каждого хоста
 
-    - name: Проверка, что указанный хост существует в файле инвентаря
+    - name: Проверка наличия хоста в файле инвентаря
       fail:
         msg: "Ошибка! Хост '{{ host }}' не найден в вашем файле инвентаря"
       when: host not in groups['all']
 
-  tasks:
-    - name: Получение данных о пользователе из passwd
+    - name: Проверка наличия пользователя на целевом хосте
       ansible.builtin.getent:
         database: passwd
         key: "{{ user }}"
         fail_key: false
 
-    - name: Создание переменной is_user_exist
+    - name: Фиксация факта существования пользователя
       ansible.builtin.set_fact:
         is_user_exist: "{{ getent_passwd[user] is defined and getent_passwd[user] is sequence }}"
 
-    - name: Гарантировать наличие первичной группы learners в системе
-      ansible.builtin.group:
-        name: learners
-        state: present
-
     - name: Интерактивный запрос пароля для нового ученика
-      pause:
+      ansible.builtin.pause:
         prompt: "Введите пароль для создания пользователя {{ user }} на хосте {{ inventory_hostname }}"
         echo: false
       register: password_input
       delegate_to: localhost
       become: false
+      # Запрос пароля только если пользователь не зарегистрирован
       when: not is_user_exist
 
     - name: Интерактивный запрос подтверждения пароля
-      pause:
+      ansible.builtin.pause:
         prompt: "Повторите пароль для подтверждения"
         echo: false
       register: password_confirm
       delegate_to: localhost
       become: false
+      # Запрос подтверждения пароля только если пользователь не зарегистрирован
       when: not is_user_exist
 
     - name: Проверка совпадения введенных паролей
-      fail:
+      ansible.builtin.fail:
         msg: "Ошибка! Введенные пароли не совпадают. Перезапустите плейбук"
       when: 
         - not is_user_exist
         - password_input.user_input != password_confirm.user_input
 
-    - name: Создание новой учетной записи или обновление параметров существующей
-      user:
-        name: "{{ user }}"
-        group: learners
-        groups:
-          - kvm
-          - libvirt
-          - libvirt-qemu
-          - libvirt-admin
-        append: yes
-        shell: /bin/bash
-        state: present
-        create_home: yes
-
-    - name: Установка пароля для новой учетной записи
-      shell: "echo '{{ user }}:{{ password_input.user_input }}' | chpasswd"
-      no_log: true
-      when: not is_user_exist
+  roles:
+    - role: users
+      vars:
+        user_action: create
+        # Передача пароля, только если он был введен, иначе пустого значения/omit
+        user_password: "{{ password_input.user_input if not is_user_exist else omit }}"

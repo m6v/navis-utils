@@ -1,5 +1,5 @@
 ---
-- name: Управление учетной записью обучаемого
+- name: Оркестрация удаления учетной записи обучаемого
   hosts: "{{ host }}"
   become: true
 
@@ -8,42 +8,20 @@
       fail:
         msg: "Ошибка! Не задан параметр host и/или user. Пример: -e 'host=lws-01 user=ivanov'"
       when: (user is not defined) or (host is not defined)
-      tags: always
+      run_once: true
 
-    - name: Проверка, что указанный хост существует в файле инвентаря
+    - name: Проверка наличия хоста в файле инвентаря
       fail:
         msg: "Ошибка! Хост '{{ host }}' не найден в вашем файле инвентаря"
       when: host not in groups['all']
 
-    - name: "Получить список пользователей из /etc/passwd"
-      ansible.builtin.getent:
-        database: passwd
+  roles:
+    # Уничтожение пула виртуальных машин обучаемого
+    - role: vlab
+      vars:
+        vlab_action: destroy_user_pool
 
-    - name: "Проверка наличия учетной записи {{ user }}"
-      ansible.builtin.fail:
-        msg: "Ошибка! Пользователь '{{ user }}' не зарегистрирован на хосте {{ host }}"
-      when: user not in ansible_facts.getent_passwd
-
-
-  tasks:
-    - name: "Принудительное завершение сессии пользователя {{ user }}"
-      ansible.builtin.shell: "pkill -u {{ user }}"
-       # Игнорировать ошибку, если пользователь в этот момент не залогинен
-      failed_when: false
-      changed_when: true
-
-    - name: "Пауза для завершения процессов"
-      ansible.builtin.pause:
-        seconds: 2
-
-    - name: "Удалиение учетной записи {{ user }}"
-      ansible.builtin.user:
-        name: "{{ user }}"
-        state: absent
-        remove: false
-        force: true
-
-    - name: "Удаление домашней директории пользователя {{ user }}"
-      ansible.builtin.file:
-        path: "/home/{{ user }}"
-        state: absent
+    # Удаление учетной записи обучаемого
+    - role: users
+      vars:
+        user_action: delete

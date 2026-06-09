@@ -1,0 +1,8 @@
+---
+system_pool_name: "default"
+system_pool_path: "/var/lib/libvirt/images"
+
+# Имена виртуальных учебных сетей на рабочих местах обучаемых
+virtual_networks:
+  - "intnet"
+  - "extnet"

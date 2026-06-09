@@ -1,0 +1,134 @@
+---
+- name: Установка метапакета виртуализации astra-kvm
+  apt:
+    name: astra-kvm
+    state: present
+
+- name: Принудительная остановка службы firewalld, установленной astra-kvm
+  service:
+    name: firewalld
+    state: stopped
+  failed_when: false
+
+- name: Маскирование (запрет запуска) службы firewalld
+  systemd:
+    name: firewalld
+    masked: yes
+
+- name: Включение и запуск службы виртуализации libvirtd
+  service:
+    name: libvirtd
+    state: started
+    enabled: yes
+
+- name: Проверка наличия сети default
+  command: virsh net-info default
+  register: default_net_check
+  failed_when: false
+  changed_when: false
+
+- name: Удаление сети default
+  command: "{{ item }}"
+  with_items:
+    # Принудительно останавливаем сеть
+    - "virsh net-destroy default"
+    # Удаляем конфигурацию сети системы
+    - "virsh net-undefine default"
+  loop_control:
+    loop_var: item
+  when: default_net_check.rc == 0
+  # Игнорируем ошибки, если сеть уже остановлена
+  failed_when: false
+
+- name: Копирование XML-шаблонов сетей intnet и extnet на целевые машины
+  template:
+    src: "templates/{{ item }}.xml"
+    dest: "/tmp/{{ item }}.xml"
+  loop: "{{ virtual_networks }}"
+
+- name: Проверка статуса новых сетей в libvirt
+  command: "virsh net-info {{ item }}"
+  register: net_check
+  failed_when: false
+  changed_when: false
+  loop: "{{ virtual_networks }}"
+
+- name: Определение сетей в libvirt (если они отсутствуют)
+  command: "virsh net-define /tmp/{{ item.item }}.xml"
+  loop: "{{ net_check.results }}"
+  when: item.rc != 0
+
+- name: Запуск виртуальных сетей
+  command: "virsh net-start {{ item }}"
+  loop: "{{ virtual_networks }}"
+  # Если сеть уже запущена, игнорируем ошибку, которую выдаст virsh
+  failed_when: false
+
+- name: Добавление виртуальных сетей в автозагрузку гипервизора
+  command: "virsh net-autostart {{ item }}"
+  loop: "{{ virtual_networks }}"
+  failed_when: false
+
+- name: Добавление администратора и root в группы виртуализации Astra Linux
+  user:
+    name: "{{ item }}"
+    groups:
+      - kvm
+      - libvirt
+      - libvirt-admin
+    append: yes
+  loop:
+    - "administrator"
+    - "root"
+
+- name: Определение дефолтного пула в libvirt
+  # Принудительное применение (switch group) прав группы libvirt в текущей SSH-сессии без перезапуска системы
+  command: "sg libvirt -c 'virsh pool-define-as {{ system_pool_name }} dir --target {{ system_pool_path }}'"
+  register: pool_def
+  failed_when: false
+
+- name: Запуск дефолтного пула хранения
+  command: "sg libvirt -c 'virsh pool-start {{ system_pool_name }}'"
+  failed_when: false
+
+- name: Добавление дефолтного пула в автозагрузку при старте хоста
+  command: "sg libvirt -c 'virsh pool-autostart {{ system_pool_name }}'"
+  failed_when: false
+
+- name: Проверка наличия измененных файлов в каталоге distros
+  shell: "find files/distros -type f -newer files/images/distros.iso -print -quit || true"
+  register: is_distro_changes
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+- name: Сборка files/images/distros.iso из файлов в папке files/distros
+  # Объединение сборки ISO и touch в одну задачу через bash, чтобы гарантированно обновить время файла
+  shell: >
+    genisoimage -input-charset utf-8 -r -J -joliet-long -U -o files/images/distros.iso files/distros &&
+    touch files/images/distros.iso
+  delegate_to: localhost
+  become: false
+  when: is_distro_changes.stdout != ""
+
+- name: Копирование образов виртуальных машин из files/images в системный пул
+  synchronize:
+    # Слэш на конце src задает копирование содержимого каталога, а не самого каталога
+    src: files/images/
+    dest: "{{ system_pool_path }}/"
+    recursive: yes
+    delete: no
+    archive: yes
+
+- name: Обновление пула хранения Libvirt для обнаружения новых файлов
+  command: "virsh pool-refresh {{ system_pool_name }}"
+  changed_when: false
+
+- name: Копирование иконок ярлыков из files/icons в системный каталог
+  synchronize:
+    # Слэш на конце src задает копирование содержимого каталога, а не самого каталога
+    src: files/icons/
+    dest: "/usr/share/pixmaps/"
+    recursive: yes
+    delete: no
+    archive: yes
