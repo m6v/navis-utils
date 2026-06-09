@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
-# Финальный функциональный код обертки Ansible
 set -euo pipefail
 
-TITLE="Панель управления виртуальным полигоном"
+TITLE="Панель управления рабочими станциями УТК-СЗИ"
 INVENTORY_FILE="hosts"
 HINT="Управление: [Стрелки] - движение, [Tab] - кнопки, [Enter] - выбор"
 
@@ -13,24 +12,23 @@ if [ ! -f "$INVENTORY_FILE" ]; then
     exit 1
 fi
 
-# Кэш сессии для хранения параметров
-last_user="" host="" user=""
-
-# Список плейбуков (Индекс массива строго совпадает с номером пункта меню)
+# Список плейбуков с индексами, соответствующими пунктам меню
+# Нулевой индекс пропускается, так как меню начинается с 1
 PLAYBOOKS=(
-    "" # Нулевой индекс пропускаем, так как меню начинается с 1
-    "init_vlab.yml"        # 1
-    "create_user.yml"      # 2
-    "delete_user.yml"      # 3
-    "define_user_pool.yml" # 4
-    "destroy_user_pool.yml" # 5
+    ""
+    "init_vlab.yml"
+    "create_user.yml"
+    "delete_user.yml"
+    "define_user_pool.yml"
+    "destroy_user_pool.yml"
 )
 
 # Функция выбора хоста из инвентаря
 select_host_from_inventory() {
-    local mode=$1
     local menu_options=()
-    [ "$mode" = "show_all" ] && menu_options+=("ALL" "Все хосты класса")
+    
+    # Пункт "ALL" доступен только для плейбуков, не привязанных к конкретному пользователю
+    [ "$is_user_required" = false ] && menu_options+=("ALL" "Все хосты класса")
 
     while read -r name ip; do
         [ ! -z "$name" ] && [ ! -z "$ip" ] && menu_options+=("$name" "$ip")
@@ -42,34 +40,38 @@ select_host_from_inventory() {
 
 # Функция для запроса имени пользователя
 prompt_user_name() {
-    user=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Ввод" --cancel-button "Назад" --inputbox "Введите имя пользователя:" 10 55 "$last_user" 3>&1 1>&2 2>&3) || return 1
-    [ -z "$user" ] && return 1 || { last_user="$user"; return 0; }
+    user=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Ввод" --cancel-button "Назад" --inputbox "Введите имя пользователя:" 10 55 "" 3>&1 1>&2 2>&3) || return 1
+    [ -z "$user" ] && return 1 || return 0
 }
 
-# Оптимизированная функция запуска Ansible
+# Функция подготовки аргументов и запуска ansible-playbook
 run_ansible() {
     local playbook=$1
-    local current_user=$2
-    local extra_vars=""
+    local user=$2
+    local parms=""
 
     clear
     
-    # Шаг 1: Если выбран конкретный хост (не ALL), добавляем его в параметры
-    [ "$host" != "ALL" ] && extra_vars="host=$host"
-    
-    # Шаг 2: Если передан пользователь (строка не пустая), добавляем его через пробел
-    if [ -n "$current_user" ]; then
-        [ -n "$extra_vars" ] && extra_vars="$extra_vars user=$current_user" || extra_vars="user=$current_user"
+    # Формируем готовую строку флагов и параметров запуска
+    if [ -n "$user" ]; then
+        parms="-e 'host=$host user=$user'"
+    else
+        [ "$host" != "ALL" ] && parms="-e 'host=$host'"
     fi
 
-    # Шаг 3: Безопасный запуск. Если extra_vars пуст, ключ -e не подставится вовсе
-    ansible-playbook "$playbook" ${extra_vars:+-e "$extra_vars"} || true
+    # Одинарные кавычки защищают синтаксис команды,
+    # а двойные раскрывают переменные без экранирования слэшами
+    eval 'ansible-playbook "'"$playbook"'" '"$parms" || true
     
     read -n 1 -s -r -p "Нажмите любую клавишу..."
 }
 
 # Главный цикл панели управления
 while true; do
+    # Инициализация и принудительный сброс параметров перед каждым действием
+    host=""
+    user=""
+
     choice=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Выбрать" --cancel-button "Выход" --menu "Выберите действие:" 15 65 5 \
         "1" "Инициализировать рабочее место" \
         "2" "Создать учетную запись пользователя" \
@@ -82,31 +84,24 @@ while true; do
         exit 0
     fi
 
-    # Считываем имя плейбука по индексу выбранного пункта меню
+    # Чтение имени плейбука по индексу выбранного пункта меню
     playbook="${PLAYBOOKS[$choice]}"
     
     # Интеллектуальное определение логики на основе имени плейбука
     if [[ "$playbook" == *"user"* ]]; then
-        need_user=true
-        inv_mode="hide_all"
+        is_user_required=true
     else
-        need_user=false
-        inv_mode="show_all"
+        is_user_required=false
     fi
 
     # Конвейер шагов интерфейса
-    select_host_from_inventory "$inv_mode" || continue
-    [ "$need_user" = true ] && { prompt_user_name || continue; }
+    select_host_from_inventory || continue
+    [ "$is_user_required" = true ] && { prompt_user_name || continue; }
 
     # Индивидуальное исключение для подтверждения удаления (пункт 3)
     if [ "$choice" -eq 3 ]; then
         whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user' на хосте '$host'?" 10 60 || continue
     fi
 
-    # Запуск сценария с передачей имени пользователя или пустой строки
-    if [ "$need_user" = true ]; then
-        run_ansible "$playbook" "$user"
-    else
-        run_ansible "$playbook" ""
-    fi
+    run_ansible "$playbook" "$user"
 done
