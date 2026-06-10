@@ -1,18 +1,44 @@
 ---
-- name: Развертывание виртуального полигона на рабочем месте обучаемого
-  # Заставляем фильтр default срабатывать не только на отсутствие переменной, но и на пустые строки (или значения false)
+# СЦЕНАРИЙ 1: Динамическое определение пользователя по UID 1000
+- name: Определение ansible_user по UID 1000
   hosts: "{{ host | default('class', true) }}"
+  gather_facts: false
   become: true
 
-  # Глобальные переменные окружения для всего плейбука
+  tasks:
+    - name: Чтение базы данных passwd
+      ansible.builtin.getent:
+        database: passwd
+
+    - name: Поиск имени пользователя с UID 1000
+      ansible.builtin.set_fact:
+        target_username: "{{ item.key }}"
+      loop: "{{ getent_passwd | dict2items }}"
+      when: item.value.1 == '1000'
+
+    - name: Принудительная установка ansible_user для всех последующих сценариев
+      ansible.builtin.set_fact:
+        ansible_user: "{{ target_username }}"
+        # Переносим переменную на уровень хоста, чтобы её видели другие plays
+        cacheable: true 
+
+    - name: Проверка успешности установки
+      ansible.builtin.debug:
+        msg: "Пользователь успешно определен. Текущий ansible_user: {{ ansible_user }}"
+
+
+# СЦЕНАРИЙ 2: Основное развертывание (переменные окружения и роли)
+- name: Развертывание виртуального полигона на рабочем месте обучаемого
+  hosts: "{{ host | default('class', true) }}"
+  gather_facts: true # Теперь можно безопасно собирать факты от имени UID 1000
+  become: true
+
+  # Глобальные переменные окружения для этого сценария
   environment:
-    # Менеджеру apt выполнять установку в полностью автоматическом режиме,
-    # отвечая согласием на все всплывающие вопросы
     DEBIAN_FRONTEND: noninteractive
-    # Явно разрешаем root управлять Libvirt без ограничений
     LIBVIRT_DEFAULT_URI: "qemu:///system"
 
   roles:
     - common
     - security
-    - vlab 
+    - vlab

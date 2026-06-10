@@ -18,4 +18,4 @@ lws-05 ansible_host=192.168.1.15
 # Общие переменные для всех хостов
 [all:vars]
 ansible_connection=ssh
-ansible_user=administrator
+
