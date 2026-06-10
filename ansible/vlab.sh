@@ -100,7 +100,7 @@ while true; do
     [ "$is_user_required" = true ] && { prompt_user_name || continue; }
 
     # Индивидуальное исключение для подтверждения удаления (пункт 3)
-    if [ "$choice" -eq 3 ]; then
+    if [ "$choice" -eq 5 ]; then
         whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user' и пул на хосте '$host'?" 10 60 || continue
     fi
 

@@ -1,44 +1,40 @@
 ---
-- name: Установка метапакета виртуализации astra-kvm
-  apt:
-    name: astra-kvm
+- name: Установка режима сборки initrd.img только под текущее железо MODULES=dep
+  ansible.builtin.lineinfile:
+    path: /etc/initramfs-tools/initramfs.conf
+    regexp: '^MODULES='
+    line: 'MODULES=dep'
     state: present
 
-- name: Принудительная остановка службы firewalld, установленной astra-kvm
-  service:
-    name: firewalld
-    state: stopped
-  failed_when: false
-
-- name: Маскирование (запрет запуска) службы firewalld
-  systemd:
-    name: firewalld
-    masked: yes
-
-- name: Включение и запуск службы виртуализации libvirtd
-  service:
-    name: libvirtd
-    state: started
-    enabled: yes
-
-- name: Проверка наличия сети default
-  command: virsh net-info default
-  register: default_net_check
-  failed_when: false
+- name: Установка быстрого сжатия COMPRESS=zstd при сборке initrd.img
+  ansible.builtin.lineinfile:
+    path: /etc/initramfs-tools/initramfs.conf
+    regexp: '^COMPRESS='
+    line: 'COMPRESS=zstd'
+    state: present
+    
+- name: Установка QEMU/KVM
+  apt:
+    name:
+      - qemu-kvm
+      - libvirt-daemon-system
+      - virt-manager
+    state: present
+  
+- name: Остановка и отключение сети default
+  shell: |
+    virsh net-destroy default 2>/dev/null || true
+    virsh net-undefine default 2>/dev/null || true
+  # Чтобы Ansible не считал этот шаг изменением при каждом запуске
   changed_when: false
 
-- name: Удаление сети default
-  command: "{{ item }}"
-  with_items:
-    # Принудительно останавливаем сеть
-    - "virsh net-destroy default"
-    # Удаляем конфигурацию сети системы
-    - "virsh net-undefine default"
-  loop_control:
-    loop_var: item
-  when: default_net_check.rc == 0
-  # Игнорируем ошибки, если сеть уже остановлена
-  failed_when: false
+- name: Удаление конфигурационных файлов сети default
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/libvirt/qemu/networks/autostart/default.xml
+    - /etc/libvirt/qemu/networks/default.xml
 
 - name: Копирование XML-шаблонов сетей intnet и extnet на целевые машины
   template:
@@ -58,18 +54,14 @@
   loop: "{{ net_check.results }}"
   when: item.rc != 0
 
-- name: Запуск виртуальных сетей
-  command: "virsh net-start {{ item }}"
+- name: Запуск и добавление виртуальных сетей в автозагрузку
+  shell: |
+    virsh net-start "{{ item }}" 2>/dev/null || true
+    virsh net-autostart "{{ item }}" 2>/dev/null || true
   loop: "{{ virtual_networks }}"
-  # Если сеть уже запущена, игнорируем ошибку, которую выдаст virsh
-  failed_when: false
+  changed_when: false
 
-- name: Добавление виртуальных сетей в автозагрузку гипервизора
-  command: "virsh net-autostart {{ item }}"
-  loop: "{{ virtual_networks }}"
-  failed_when: false
-
-- name: Добавление администратора и root в группы виртуализации Astra Linux
+- name: Добавление administrator и root в группы виртуализации Astra Linux
   user:
     name: "{{ item }}"
     groups:
