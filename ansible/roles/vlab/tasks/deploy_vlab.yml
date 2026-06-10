@@ -1,5 +1,5 @@
 ---
-- name: Установка режима сборки initrd.img только под текущее железо MODULES=dep
+- name: Установка режима сборки initrd.img MODULES=dep
   ansible.builtin.lineinfile:
     path: /etc/initramfs-tools/initramfs.conf
     regexp: '^MODULES='
@@ -36,30 +36,21 @@
     - /etc/libvirt/qemu/networks/autostart/default.xml
     - /etc/libvirt/qemu/networks/default.xml
 
-- name: Копирование XML-шаблонов сетей intnet и extnet на целевые машины
+- name: Копирование XML-шаблонов во временный каталог
   template:
     src: "templates/{{ item }}.xml"
     dest: "/tmp/{{ item }}.xml"
+    mode: '0644'
   loop: "{{ virtual_networks }}"
 
-- name: Проверка статуса новых сетей в libvirt
-  command: "virsh net-info {{ item }}"
-  register: net_check
-  failed_when: false
-  changed_when: false
-  loop: "{{ virtual_networks }}"
-
-- name: Определение сетей в libvirt (если они отсутствуют)
-  command: "virsh net-define /tmp/{{ item.item }}.xml"
-  loop: "{{ net_check.results }}"
-  when: item.rc != 0
-
-- name: Запуск и добавление виртуальных сетей в автозагрузку
+- name: Регистрация, запуск и добавление сетей в автозагрузку
   shell: |
-    virsh net-start "{{ item }}" 2>/dev/null || true
-    virsh net-autostart "{{ item }}" 2>/dev/null || true
+    virsh net-define "/tmp/{{ item }}.xml"
+    virsh net-start "{{ item }}" || true
+    virsh net-autostart "{{ item }}" || true
+    rm -f "/tmp/{{ item }}.xml"
   loop: "{{ virtual_networks }}"
-  changed_when: false
+  changed_when: true
 
 - name: Добавление administrator и root в группы виртуализации Astra Linux
   user:
