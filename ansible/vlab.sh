@@ -18,9 +18,9 @@ PLAYBOOKS=(
     ""
     "init_vlab.yml"
     "create_user.yml"
-    "delete_user.yml"
     "define_user_pool.yml"
     "destroy_user_pool.yml"
+    "delete_user.yml"
 )
 
 # Функция выбора хоста из инвентаря
@@ -28,7 +28,7 @@ select_host_from_inventory() {
     local menu_options=()
     
     # Пункт "ALL" доступен только для плейбуков, не привязанных к конкретному пользователю
-    [ "$is_user_required" = false ] && menu_options+=("ALL" "Все хосты класса")
+    [ "$is_user_required" = false ] && menu_options+=("ALL" "Все хосты")
 
     while read -r name ip; do
         [ ! -z "$name" ] && [ ! -z "$ip" ] && menu_options+=("$name" "$ip")
@@ -38,7 +38,7 @@ select_host_from_inventory() {
     [ -z "$host" ] && return 1 || return 0
 }
 
-# Функция для запроса имени пользователя
+# Функция запроса имени пользователя
 prompt_user_name() {
     user=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Ввод" --cancel-button "Назад" --inputbox "Введите имя пользователя:" 10 55 "" 3>&1 1>&2 2>&3) || return 1
     [ -z "$user" ] && return 1 || return 0
@@ -52,7 +52,7 @@ run_ansible() {
 
     clear
     
-    # Формируем готовую строку флагов и параметров запуска
+    # Формирование готовой строки параметров запуска
     if [ -n "$user" ]; then
         parms="-e 'host=$host user=$user'"
     else
@@ -60,7 +60,7 @@ run_ansible() {
     fi
 
     # Одинарные кавычки защищают синтаксис команды,
-    # а двойные раскрывают переменные без экранирования слэшами
+    # двойные раскрывают переменные без экранирования слэшами
     eval 'ansible-playbook "'"$playbook"'" '"$parms" || true
     
     read -n 1 -s -r -p "Нажмите любую клавишу..."
@@ -73,11 +73,11 @@ while true; do
     user=""
 
     choice=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Выбрать" --cancel-button "Выход" --menu "Выберите действие:" 15 65 5 \
-        "1" "Инициализировать рабочее место" \
+        "1" "Инициализировать среду виртуализации" \
         "2" "Создать учетную запись пользователя" \
-        "3" "Удалить учетную запись и пул виртуальных машин" \
-        "4" "Создать пул виртуальных машин для пользователя" \
-        "5" "Уничтожить пул виртуальных машин пользователя" 3>&1 1>&2 2>&3)
+        "3" "Создать пул виртуальных машин пользователя" \
+        "4" "Удалить пул виртуальных машин пользователя" \
+        "5" "Удалить учетную запись и пул виртуальных машин" 3>&1 1>&2 2>&3)
 
     if [ $? -ne 0 ] || [ -z "$choice" ]; then
         clear
@@ -87,7 +87,8 @@ while true; do
     # Чтение имени плейбука по индексу выбранного пункта меню
     playbook="${PLAYBOOKS[$choice]}"
     
-    # Интеллектуальное определение логики на основе имени плейбука
+    # Определение необходимости выбора имени пользователя по имени плейбука
+    # (в плейбуках, содержащих user в названии, требуется задать пользователя)
     if [[ "$playbook" == *"user"* ]]; then
         is_user_required=true
     else
@@ -100,7 +101,7 @@ while true; do
 
     # Индивидуальное исключение для подтверждения удаления (пункт 3)
     if [ "$choice" -eq 3 ]; then
-        whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user' на хосте '$host'?" 10 60 || continue
+        whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user' и пул на хосте '$host'?" 10 60 || continue
     fi
 
     run_ansible "$playbook" "$user"
