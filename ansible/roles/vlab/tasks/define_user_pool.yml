@@ -21,6 +21,9 @@
     - "virsh pool-define-as {{ user_pool_name }} dir --target {{ user_pool_path }}"
     - "virsh pool-start {{ user_pool_name }}"
     - "virsh pool-autostart {{ user_pool_name }}"
+  # Действия выполняем под учетной записью администратора, а не root,
+  # так как тот не привязан к группе libvirt, что вызовет ошибку QEMU
+  become: false
   when: pool_check.rc != 0
 
 - name: Принудительное обновление пула
@@ -77,6 +80,9 @@
 - name: Регистрация (определение) новых виртуальных машин
   command: "virsh define /tmp/{{ item }}.xml"
   loop: "{{ user_domains }}"
+  # Действия выполняем под учетной записью администратора, а не root,
+  # так как тот не привязан к группе libvirt, что вызовет ошибку QEMU
+  become: false
 
 - name: Определение пути к рабочему столу обучаемого
   command: "xdg-user-dir DESKTOP"

@@ -6,7 +6,7 @@
       - libvirt-daemon-system
       - virt-manager
     state: present
-  # Скрыть скрыть подробный вывод в stdout
+  # Скрыть скрыть вывод stdout
   no_log: true
   
 - name: Остановка и отключение сети default
