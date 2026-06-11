@@ -1,41 +1,11 @@
 ---
-# Динамическое определение пользователя по UID 1000
-- name: Определение ansible_user по UID 1000
-  hosts: "{{ host | default('class', true) }}"
-  gather_facts: false
-  become: true
-
-  tasks:
-    - name: Чтение базы данных passwd
-      getent:
-        database: passwd
-
-    - name: Поиск имени пользователя с UID 1000
-      set_fact:
-        target_username: "{{ item.key }}"
-      loop: "{{ getent_passwd | dict2items }}"
-      when: item.value.1 == '1000'
-
-    - name: Принудительная установка ansible_user для всех последующих сценариев
-      set_fact:
-        ansible_user: "{{ target_username }}"
-        # Перенос переменной на уровень хоста, чтобы её видели другие плейбуки
-        cacheable: true 
-
-    - name: Проверка успешности установки
-      debug:
-        msg: "Пользователь успешно определен. Текущий ansible_user: {{ ansible_user }}"
-
-
-# Основное развертывание (переменные окружения и роли)
 - name: Развертывание среды виртуализации
   hosts: "{{ host | default('class', true) }}"
-  # Теперь можно безопасно собирать факты от имени UID 1000
   gather_facts: true
   become: true
 
-  # Глобальные переменные окружения для этого сценария
   environment:
+    # Настройка полностью молчаливого режима рабрты apt
     DEBIAN_FRONTEND: noninteractive
     LIBVIRT_DEFAULT_URI: "qemu:///system"
 
