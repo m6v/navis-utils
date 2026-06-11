@@ -1,16 +1,16 @@
 ---
 - name: Установка режима сборки initrd.img MODULES=dep
-  ansible.builtin.lineinfile:
+  lineinfile:
     path: /etc/initramfs-tools/initramfs.conf
     regexp: '^MODULES='
     line: 'MODULES=dep'
     state: present
 
-- name: Установка быстрого сжатия COMPRESS=zstd при сборке initrd.img
-  ansible.builtin.lineinfile:
+- name: Установка быстрого сжатия COMPRESS=lz4 при сборке initrd.img
+  lineinfile:
     path: /etc/initramfs-tools/initramfs.conf
     regexp: '^COMPRESS='
-    line: 'COMPRESS=zstd'
+    line: 'COMPRESS=lz4'
     state: present
     
 - name: Установка QEMU/KVM
@@ -44,6 +44,7 @@
   loop: "{{ virtual_networks }}"
 
 - name: Регистрация, запуск и добавление сетей в автозагрузку
+  # Заглушки || true подавляют ошибки при повторном запуске задачи
   shell: |
     virsh net-define "/tmp/{{ item }}.xml"
     virsh net-start "{{ item }}" || true
@@ -52,47 +53,28 @@
   loop: "{{ virtual_networks }}"
   changed_when: true
 
-- name: Добавление administrator и root в группы виртуализации Astra Linux
+- name: Добавление текущего пользователя в группы виртуализации
   user:
-    name: "{{ item }}"
+    name: "{{ ansible_user }}"
     groups:
       - kvm
       - libvirt
       - libvirt-admin
     append: yes
-  loop:
-    - "administrator"
-    - "root"
 
-- name: Определение дефолтного пула в libvirt
-  # Принудительное применение (switch group) прав группы libvirt в текущей SSH-сессии без перезапуска системы
-  command: "sg libvirt -c 'virsh pool-define-as {{ system_pool_name }} dir --target {{ system_pool_path }}'"
-  register: pool_def
-  failed_when: false
-
-- name: Запуск дефолтного пула хранения
-  command: "sg libvirt -c 'virsh pool-start {{ system_pool_name }}'"
-  failed_when: false
-
-- name: Добавление дефолтного пула в автозагрузку при старте хоста
-  command: "sg libvirt -c 'virsh pool-autostart {{ system_pool_name }}'"
-  failed_when: false
-
-- name: Проверка наличия измененных файлов в каталоге distros
-  shell: "find files/distros -type f -newer files/images/distros.iso -print -quit || true"
-  register: is_distro_changes
+- name: Проверка изменений и сборка distros.iso
+  shell: |
+    cd "{{ role_path }}/files"
+    is_changes=$(find distros -type f -newer images/distros.iso -print -quit 2>/dev/null)
+    if ! [ -f images/distros.iso ] || [ -n "$is_changes" ]; then
+      genisoimage -input-charset utf-8 -r -J -joliet-long -U -o images/distros.iso distros && \
+      touch images/distros.iso
+      echo "changed"
+    fi
+  register: iso_build_result
   delegate_to: localhost
   become: false
-  changed_when: false
-
-- name: Сборка files/images/distros.iso из файлов в папке files/distros
-  # Объединение сборки ISO и touch в одну задачу через bash, чтобы гарантированно обновить время файла
-  shell: >
-    genisoimage -input-charset utf-8 -r -J -joliet-long -U -o files/images/distros.iso files/distros &&
-    touch files/images/distros.iso
-  delegate_to: localhost
-  become: false
-  when: is_distro_changes.stdout != ""
+  changed_when: iso_build_result.stdout == "changed"
 
 - name: Копирование образов виртуальных машин из files/images в системный пул
   synchronize:
@@ -103,11 +85,14 @@
     delete: no
     archive: yes
 
-- name: Обновление пула хранения Libvirt для обнаружения новых файлов
-  command: "virsh pool-refresh {{ system_pool_name }}"
+- name: Настройки дефолтного пула хранения (рабочий вариант для Astra Linux)
+  shell: |
+    sg libvirt -c "virsh pool-define-as {{ system_pool_name }} dir --target {{ system_pool_path }} 2>/dev/null || true"
+    sg libvirt -c "virsh pool-start {{ system_pool_name }} 2>/dev/null || true"
+    sg libvirt -c "virsh pool-autostart {{ system_pool_name }} 2>/dev/null || true"
   changed_when: false
 
-- name: Копирование иконок ярлыков из files/icons в системный каталог
+- name: Копирование иконок из files/icons в системный каталог
   synchronize:
     # Слэш на конце src задает копирование содержимого каталога, а не самого каталога
     src: files/icons/

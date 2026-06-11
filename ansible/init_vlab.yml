@@ -7,23 +7,23 @@
 
   tasks:
     - name: Чтение базы данных passwd
-      ansible.builtin.getent:
+      getent:
         database: passwd
 
     - name: Поиск имени пользователя с UID 1000
-      ansible.builtin.set_fact:
+      set_fact:
         target_username: "{{ item.key }}"
       loop: "{{ getent_passwd | dict2items }}"
       when: item.value.1 == '1000'
 
     - name: Принудительная установка ansible_user для всех последующих сценариев
-      ansible.builtin.set_fact:
+      set_fact:
         ansible_user: "{{ target_username }}"
         # Перенос переменной на уровень хоста, чтобы её видели другие плейбуки
         cacheable: true 
 
     - name: Проверка успешности установки
-      ansible.builtin.debug:
+      debug:
         msg: "Пользователь успешно определен. Текущий ansible_user: {{ ansible_user }}"
 
 

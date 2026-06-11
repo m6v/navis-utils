@@ -1,24 +1,24 @@
 ---
-- name: Генерация SSH-ключа RSA на управляющем компьютере
+- name: Проверка наличия SSH-ключа RSA на localhost
   stat:
     path: "~/.ssh/id_rsa"
   register: rsa
   delegate_to: localhost
   become: false
 
-- name: Генерация SSH-ключа RSA на управляющем компьютере (если его нет)
+- name: Генерация SSH-ключа RSA на localhost
   shell: "ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ''"
   delegate_to: localhost
   become: false
   when: not rsa.stat.exists
 
-- name: Автоматическое добавление SSH-ключа в доверенные на целевые хосты
+- name: Добавление SSH-ключа в доверенные
   authorized_key:
     user: administrator
     key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_rsa.pub') }}"
     state: present
 
-- name: Установка дополнительных пакетов (nftables и rsync)
+- name: Установка nftables и rsync
   apt:
     name:
       - nftables
