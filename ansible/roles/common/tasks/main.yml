@@ -1,22 +1,26 @@
 ---
-- name: Проверка наличия SSH-ключа RSA на localhost
-  stat:
+- name: Проверка и генерация SSH-ключа RSA на localhost
+  openssh_keypair:
     path: "~/.ssh/id_rsa"
-  register: rsa
+    type: rsa
+    size: 4096
   delegate_to: localhost
   become: false
-
-- name: Генерация SSH-ключа RSA на localhost
-  shell: "ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ''"
-  delegate_to: localhost
-  become: false
-  when: not rsa.stat.exists
 
 - name: Добавление SSH-ключа в доверенные
   authorized_key:
     user: administrator
     key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_rsa.pub') }}"
     state: present
+
+- name: Оптимизация параметров пересборки initrd.img
+  replace:
+    path: /etc/initramfs-tools/initramfs.conf
+    regexp: "{{ item.regexp }}"
+    replace: "{{ item.replace }}"
+  loop:
+    - { regexp: '^MODULES=.*', replace: 'MODULES=dep' }
+    - { regexp: '^COMPRESS=.*', replace: 'COMPRESS=lz4' }
 
 - name: Установка nftables и rsync
   apt:
@@ -25,3 +29,5 @@
       - rsync
     state: present
     update_cache: yes
+  # Скрыть скрыть подробный вывод в stdout
+  no_log: true

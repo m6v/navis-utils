@@ -17,8 +17,8 @@
   # Триггер, вызывающий обработчик, если файл изменился
   notify: Перезапуск nftables 
 
-- name: Запуск nftables, чтобы он монополизировал подсистему netfilter
+- name: Запуск nftables
   service:
     name: nftables
-    state: restarted
+    state: started
     enabled: yes
