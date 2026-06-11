@@ -10,7 +10,7 @@
     mode: '0711'
 
 - name: Проверка наличия пользовательского пула с именем обучаемого
-  command: virsh pool-info {{ user_pool_name }}
+  command: virsh -qemu:///system pool-info {{ user_pool_name }}
   register: pool_check
   failed_when: false
   changed_when: false
@@ -18,16 +18,16 @@
 - name: Регистрация, запуск и добавление пользовательского пула в автозагрузку
   command: "{{ item }}"
   with_items:
-    - "virsh pool-define-as {{ user_pool_name }} dir --target {{ user_pool_path }}"
-    - "virsh pool-start {{ user_pool_name }}"
-    - "virsh pool-autostart {{ user_pool_name }}"
+    - "virsh -c qemu:///system pool-define-as {{ user_pool_name }} dir --target {{ user_pool_path }}"
+    - "virsh -c qemu:///system pool-start {{ user_pool_name }}"
+    - "virsh -c qemu:///system pool-autostart {{ user_pool_name }}"
   # Действия выполняем под учетной записью администратора, а не root,
   # так как тот не привязан к группе libvirt, что вызовет ошибку QEMU
   become: false
   when: pool_check.rc != 0
 
 - name: Принудительное обновление пула
-  command: "virsh pool-refresh {{ user_pool_name }}"
+  command: "virsh -c qemu:///system pool-refresh {{ user_pool_name }}"
   failed_when: false
   changed_when: false
 
@@ -59,7 +59,7 @@
     recurse: yes
 
 - name: Принудительное обновление пользовательского пула Libvirt
-  command: "virsh pool-refresh {{ user_pool_name }}"
+  command: "virsh -c qemu:///system pool-refresh {{ user_pool_name }}"
   failed_when: false
   changed_when: false
 
@@ -73,12 +73,12 @@
   loop: "{{ user_domains }}"
 
 - name: Принудительное удаление старых виртуальных машин
-  command: "virsh undefine {{ item }} --nvram"
+  command: "virsh -c qemu:///system undefine {{ item }} --nvram"
   loop: "{{ user_domains }}"
   failed_when: false
 
 - name: Регистрация (определение) новых виртуальных машин
-  command: "virsh define /tmp/{{ item }}.xml"
+  command: "virsh -c qemu:///system define /tmp/{{ item }}.xml"
   loop: "{{ user_domains }}"
   # Действия выполняем под учетной записью администратора, а не root,
   # так как тот не привязан к группе libvirt, что вызовет ошибку QEMU
