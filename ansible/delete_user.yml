@@ -15,13 +15,21 @@
         msg: "Ошибка! Хост '{{ host }}' не найден в вашем файле инвентаря"
       when: host not in groups['all']
 
-  roles:
-    # Уничтожение пула виртуальных машин обучаемого
-    - role: vlab
-      vars:
-        vlab_action: destroy_user_pool
+    - name: Проверка существования пула для пользователя {{ user }}
+      command: "virsh pool-info {{ user }}"
+      register: pool_check
+      # Игнорировать ошибку, если пула нет (virsh вернет code > 0)
+      failed_when: false
+       # Задача только читает данные, ничего не меняя
+      changed_when: false
 
-    # Удаление учетной записи обучаемого
+    - name: Прерывание плейбука, если пул пользователя существует
+      fail:
+        msg: "Прерывание! Пул для пользователя '{{ user }}' существует. Удалите пул и повторите попытку"
+       # Если rc == 0, значит команда virsh выполнилась успешно и пул найден
+      when: pool_check.rc == 0
+
+  roles:
     - role: users
       vars:
         user_action: delete
