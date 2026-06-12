@@ -7,7 +7,6 @@
   environment:
     # Настройка полностью молчаливого режима рабрты apt
     DEBIAN_FRONTEND: noninteractive
-    LIBVIRT_DEFAULT_URI: "qemu:///system"
 
   roles:
     - common

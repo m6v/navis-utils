@@ -1,6 +1,9 @@
 ---
 - name: Ветка деплоя среды виртуализации
   when: (vlab_action | default('deploy_vlab')) == 'deploy_vlab'
+  environment:
+    # Переменные окружения, передаваемые внутрь контекста become_user
+    LIBVIRT_DEFAULT_URI: "qemu:///system"
   block:
     - name: Маршрутизация deploy_vlab
       include_tasks: "deploy_vlab.yml"
@@ -8,6 +11,9 @@
 - name: Ветка остальных задач, выполняемых от имени user
   when: (vlab_action | default('deploy_vlab')) != 'deploy_vlab'
   become_user: "{{ user }}"
+  environment:
+    # Переменные окружения, передаваемые внутрь контекста become_user
+    LIBVIRT_DEFAULT_URI: "qemu:///system"
   block:
     - name: Маршрутизация остальных задач роли vlab
       include_tasks: "{{ vlab_action }}.yml"

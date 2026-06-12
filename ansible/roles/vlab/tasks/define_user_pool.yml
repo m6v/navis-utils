@@ -1,7 +1,7 @@
 ---
 # Все задачи выполняются от {{ user }}
 - name: Проверка наличия пользовательского пула
-  command: virsh -c qemu:///system pool-info {{ user_pool_name }}
+  command: virsh pool-info {{ user_pool_name }}
   register: _user_pool_check
   failed_when: false
   changed_when: false
@@ -20,10 +20,10 @@
 - name: Регистрация, запуск и добавление пользовательского пула в автозагрузку
   command: "{{ item }}"
   with_items:
-    - "virsh -c qemu:///system pool-define-as {{ user_pool_name }} dir --target {{ user_pool_path }}"
-    - "virsh -c qemu:///system pool-start {{ user_pool_name }}"
-    - "virsh -c qemu:///system pool-autostart {{ user_pool_name }}"
-    - "virsh -c qemu:///system pool-refresh {{ user_pool_name }}"
+    - "virsh pool-define-as {{ user_pool_name }} dir --target {{ user_pool_path }}"
+    - "virsh pool-start {{ user_pool_name }}"
+    - "virsh pool-autostart {{ user_pool_name }}"
+    - "virsh pool-refresh {{ user_pool_name }}"
   when: not is_user_pool_exist
 
 - name: Поиск базовых образов qcow2 в системном пуле хранения
@@ -46,7 +46,7 @@
     creates: "{{ user_pool_path }}/{{ item }}.qcow2"
 
 - name: Принудительное обновление пользовательского пула Libvirt
-  command: "virsh -c qemu:///system pool-refresh {{ user_pool_name }}"
+  command: "virsh pool-refresh {{ user_pool_name }}"
   failed_when: false
   changed_when: false
 

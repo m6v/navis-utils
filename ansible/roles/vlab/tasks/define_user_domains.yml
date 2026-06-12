@@ -1,12 +1,12 @@
 ---
 - name: Принудительная остановка старых виртуальных машин
-  command: "virsh -c qemu:///system destroy {{ item }}"
+  command: "virsh destroy {{ item }}"
   loop: "{{ user_domains }}"
   failed_when: false
   changed_when: false
 
 - name: Принудительное удаление старых виртуальных машин
-  command: "virsh -c qemu:///system undefine {{ item }} --nvram"
+  command: "virsh undefine {{ item }} --nvram"
   loop: "{{ user_domains }}"
   failed_when: false
 
@@ -17,7 +17,7 @@
   loop: "{{ user_domains }}"
 
 - name: Регистрация (определение) новых виртуальных машин
-  command: "virsh -c qemu:///system define /tmp/{{ item }}.xml"
+  command: "virsh define /tmp/{{ item }}.xml"
   loop: "{{ user_domains }}"
 
 - name: Определение пути к рабочему столу обучаемого
