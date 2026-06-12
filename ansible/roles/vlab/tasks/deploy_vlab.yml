@@ -24,19 +24,16 @@
     - /etc/libvirt/qemu/networks/default.xml
 
 - name: Копирование XML-шаблонов во временный каталог
-  template:
-    src: "templates/{{ item }}.xml"
-    dest: "/tmp/{{ item }}.xml"
-    mode: '0644'
-  loop: "{{ virtual_networks }}"
+  copy:
+    src: networks
+    dest: /tmp/
 
 - name: Регистрация, запуск и добавление сетей в автозагрузку
   # Заглушки || true подавляют ошибки при повторном запуске задачи
   shell: |
-    virsh net-define "/tmp/{{ item }}.xml"
+    virsh net-define "/tmp/networks/{{ item }}.xml"
     virsh net-start "{{ item }}" || true
     virsh net-autostart "{{ item }}" || true
-    rm -f "/tmp/{{ item }}.xml"
   loop: "{{ virtual_networks }}"
   changed_when: true
 
@@ -50,7 +47,7 @@
     append: yes
 
 - name: Сборка distros.iso
-  ansible.builtin.shell: >
+  shell: >
     genisoimage -input-charset utf-8 -r -J -joliet-long -U
     -o {{ role_path }}/files/images/distros.iso
     {{ role_path }}/files/distros

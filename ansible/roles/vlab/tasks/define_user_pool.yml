@@ -32,13 +32,6 @@
   become: false
   when: not is_user_pool_exist
 
-# TODO Почему бы не объединить с предыдущей задачей?
-- name: Принудительное обновление пула
-  command: "virsh -c qemu:///system pool-refresh {{ user_pool_name }}"
-  failed_when: false
-  changed_when: false
-  when: false  
-
 - name: Поиск базовых образов qcow2 в системном пуле хранения
   find:
     paths: "{{ system_pool_path }}"

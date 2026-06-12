@@ -16,7 +16,7 @@ fi
 # Нулевой индекс пропускается, так как меню начинается с 1
 PLAYBOOKS=(
     ""
-    "init_vlab.yml"
+    "site.yml"
     "create_user.yml"
     "define_user_pool.yml"
     "destroy_user_pool.yml"
