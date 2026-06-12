@@ -1,6 +1,5 @@
 ---
-# Учесть, что все задачи выполняются от {{ user }}
-
+# Все задачи выполняются от {{ user }}
 - name: Проверка наличия пользовательского пула
   command: virsh -c qemu:///system pool-info {{ user_pool_name }}
   register: _user_pool_check
@@ -11,14 +10,10 @@
   set_fact:
     is_user_pool_exist: "{{ _user_pool_check.rc == 0 }}"
 
-# Если общая для всех обучаемых группа learners создаваться не будет,
-# то здесь и в последующих задач использовать парамерт group: "{{ user }}"
 - name: Рекурсивное создание структуры каталогов для пользовательского пула
   file:
     path: "{{ user_pool_path }}"
     state: directory
-    owner: "{{ user }}"
-    group: "learners"
     mode: '0711'
   when: not is_user_pool_exist
 
@@ -29,8 +24,6 @@
     - "virsh -c qemu:///system pool-start {{ user_pool_name }}"
     - "virsh -c qemu:///system pool-autostart {{ user_pool_name }}"
     - "virsh -c qemu:///system pool-refresh {{ user_pool_name }}"
-  # Действия выполняем под учетной записью администратора, а не root,
-  # так как тот не привязан к группе libvirt, что вызовет ошибку QEMU
   when: not is_user_pool_exist
 
 - name: Поиск базовых образов qcow2 в системном пуле хранения
@@ -52,18 +45,21 @@
   args:
     creates: "{{ user_pool_path }}/{{ item }}.qcow2"
 
-- name: Восстановление прав владельца на созданные оверлейные диски
-  file:
-    path: "{{ user_pool_path }}"
-    state: directory
-    owner: "{{ user }}"
-    group: "learners"
-    recurse: yes
-
 - name: Принудительное обновление пользовательского пула Libvirt
   command: "virsh -c qemu:///system pool-refresh {{ user_pool_name }}"
   failed_when: false
   changed_when: false
+
+- name: Принудительная остановка старых виртуальных машин
+  command: "virsh -c qemu:///system destroy {{ item }}"
+  loop: "{{ user_domains }}"
+  failed_when: false
+  changed_when: false
+
+- name: Принудительное удаление старых виртуальных машин
+  command: "virsh -c qemu:///system undefine {{ item }} --nvram"
+  loop: "{{ user_domains }}"
+  failed_when: false
 
 - name: Генерация XML-конфигураций виртуальных машин из шаблонов
   template:
@@ -71,36 +67,24 @@
     dest: "/tmp/{{ item }}.xml"
   loop: "{{ user_domains }}"
 
-- name: Принудительное удаление старых виртуальных машин
-  command: "virsh -c qemu:///system undefine {{ item }} --nvram"
-  loop: "{{ user_domains }}"
-  failed_when: false
-
 - name: Регистрация (определение) новых виртуальных машин
   command: "virsh -c qemu:///system define /tmp/{{ item }}.xml"
   loop: "{{ user_domains }}"
-  # Действия выполняем под учетной записью администратора, а не root,
-  # так как тот не привязан к группе libvirt, что вызовет ошибку QEMU
-  become: false
 
 - name: Определение пути к рабочему столу обучаемого
   command: "xdg-user-dir DESKTOP"
-  become_user: "{{ user }}"
   register: xdg_desktop_path
   changed_when: false
   failed_when: false
 
 - name: Установка дефолтного пути, если xdg-user-dir не вернул результат
   set_fact:
-    desktop_path: "{{ xdg_desktop_path.stdout | default('/home/' ~ user ~ '/Desktop') }}"
+    desktop_path: "{{ xdg_desktop_path.stdout | default('~/Desktop') }}"
 
 - name: Создание ярлыков запуска виртуальных машин на рабочем столе
   template:
     src: templates/shortcut.desktop.tmpl
     dest: "{{ desktop_path }}/run_{{ item }}.desktop"
-    owner: "{{ user }}"
-    group: "learners"
-    mode: '0755'
   vars:
     # Если регулярный поиск не нашёл тег <title>, default(item, true) подставит имя виртуальной машины
     vm_title: "{{ lookup('file', 'templates/' ~ item ~ '.xml') | regex_search('<title>(.*?)</title>', '\\1') | first | default(item, true) }}"
