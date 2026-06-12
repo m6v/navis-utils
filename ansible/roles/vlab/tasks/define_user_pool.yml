@@ -1,4 +1,14 @@
 ---
+- name: Проверка наличия пользовательского пула
+  command: virsh -qemu:///system pool-info {{ user_pool_name }}
+  register: _user_pool_check
+  failed_when: false
+  changed_when: false
+  
+- name: Получение логического статуса существования пула
+  set_fact:
+    is_user_pool_exist: "{{ _user_pool_check.rc == 0 }}"
+
 # Если общая для всех обучаемых группа learners создаваться не будет,
 # то здесь и в последующих задач использовать парамерт group: "{{ user }}"
 - name: Рекурсивное создание структуры каталогов для пользовательского пула
@@ -8,12 +18,7 @@
     owner: "{{ user }}"
     group: "learners"
     mode: '0711'
-
-- name: Проверка наличия пользовательского пула с именем обучаемого
-  command: virsh -qemu:///system pool-info {{ user_pool_name }}
-  register: pool_check
-  failed_when: false
-  changed_when: false
+  when: not is_user_pool_exist
 
 - name: Регистрация, запуск и добавление пользовательского пула в автозагрузку
   command: "{{ item }}"
@@ -21,15 +26,18 @@
     - "virsh -c qemu:///system pool-define-as {{ user_pool_name }} dir --target {{ user_pool_path }}"
     - "virsh -c qemu:///system pool-start {{ user_pool_name }}"
     - "virsh -c qemu:///system pool-autostart {{ user_pool_name }}"
+    - "virsh -c qemu:///system pool-refresh {{ user_pool_name }}"
   # Действия выполняем под учетной записью администратора, а не root,
   # так как тот не привязан к группе libvirt, что вызовет ошибку QEMU
   become: false
-  when: pool_check.rc != 0
+  when: not is_user_pool_exist
 
+# TODO Почему бы не объединить с предыдущей задачей?
 - name: Принудительное обновление пула
   command: "virsh -c qemu:///system pool-refresh {{ user_pool_name }}"
   failed_when: false
   changed_when: false
+  when: false  
 
 - name: Поиск базовых образов qcow2 в системном пуле хранения
   find:

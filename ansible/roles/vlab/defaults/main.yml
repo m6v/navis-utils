@@ -1,6 +1,9 @@
 ---
+# Имена и пути к пулам
 system_pool_name: "default"
 system_pool_path: "/var/lib/libvirt/images"
+user_pool_name: "{{ user }}"
+user_pool_path: "/home/{{ user }}/.local/libvirt/images"
 
 # Имена виртуальных учебных сетей на рабочих местах обучаемых
 virtual_networks:
