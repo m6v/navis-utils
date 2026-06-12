@@ -1,5 +1,5 @@
 ---
-- name: Поиск файлов оверлейных дисков в пользовательском пуле хранения
+- name: Поиск образов оверлейных дисков в пользовательском пуле хранения
   find:
     paths: "{{ user_pool_path }}"
     patterns: "*.qcow2"
@@ -44,19 +44,6 @@
   file:
     path: "{{ user_pool_path }}"
     state: absent
-
-- name: Определение пути к рабочему столу обучаемого
-  # При выполнении задачи будет предупреждение, это нормально!
-  command: "xdg-user-dir DESKTOP"
-  become: true
-  become_user: "{{ user }}"
-  register: xdg_desktop_path
-  changed_when: false
-  failed_when: false
-
-- name: Установка дефолтного пути, если xdg-user-dir не вернул результат
-  set_fact:
-    desktop_path: "{{ xdg_desktop_path.stdout | default('/home/' ~ user ~ '/Desktop') }}"
 
 - name: Поиск ярлыков на рабочем столе обучаемого, содержащих маркер vlab
   shell: "grep -l 'X-Related-To=vlab' {{ desktop_path }}/*.desktop 2>/dev/null"
