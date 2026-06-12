@@ -1,6 +1,8 @@
 ---
+# Учесть, что все задачи выполняются от {{ user }}
+
 - name: Проверка наличия пользовательского пула
-  command: virsh -qemu:///system pool-info {{ user_pool_name }}
+  command: virsh -c qemu:///system pool-info {{ user_pool_name }}
   register: _user_pool_check
   failed_when: false
   changed_when: false
@@ -29,7 +31,6 @@
     - "virsh -c qemu:///system pool-refresh {{ user_pool_name }}"
   # Действия выполняем под учетной записью администратора, а не root,
   # так как тот не привязан к группе libvirt, что вызовет ошибку QEMU
-  become: false
   when: not is_user_pool_exist
 
 - name: Поиск базовых образов qcow2 в системном пуле хранения
@@ -68,9 +69,6 @@
   template:
     src: "templates/{{ item }}.xml"
     dest: "/tmp/{{ item }}.xml"
-    owner: root
-    group: root
-    mode: '0644'
   loop: "{{ user_domains }}"
 
 - name: Принудительное удаление старых виртуальных машин

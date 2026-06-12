@@ -1,7 +1,13 @@
 ---
-- name: Установка действия по умолчанию
-  set_fact:
-    vlab_action: "{{ vlab_action | default('deploy_vlab') }}"
+- name: Ветка деплоя среды виртуализации
+  when: (vlab_action | default('deploy_vlab')) == 'deploy_vlab'
+  block:
+    - name: Маршрутизация deploy_vlab
+      include_tasks: "deploy_vlab.yml"
 
-- name: Маршрутизация задач роли vlab
-  include_tasks: "{{ vlab_action }}.yml"
+- name: Ветка остальных задач, выполняемых от имени user
+  when: (vlab_action | default('deploy_vlab')) != 'deploy_vlab'
+  become_user: "{{ user }}"
+  block:
+    - name: Маршрутизация остальных задач роли vlab
+      include_tasks: "{{ vlab_action }}.yml"
