@@ -1,0 +1,15 @@
+---
+- name: Развертывание среды виртуализации
+  hosts: "{{ host | default('class', true) }}"
+  gather_facts: true
+  become: true
+
+  environment:
+    # Настройка полностью молчаливого режима рабрты apt
+    DEBIAN_FRONTEND: noninteractive
+    LIBVIRT_DEFAULT_URI: "qemu:///system"
+
+  roles:
+    - common
+    - security
+    - vlab
