@@ -8,7 +8,7 @@ PACKAGE_NAME="ansible-vlab"
 VERSION="1.0.0"
 MAINTAINER="Sergey MAksimov <m6v@main.ru>"
 DESCRIPTION="Ansible orchestration for virtual laboratory (vlab)"
-SOURCE_DIR="./srv/ansible-vlab"
+SOURCE_DIR="./ansible-vlab"
 
 # Генерирация уникального временного каталога внутри /tmp
 BUILD_DIR=$(mktemp -d -t deb-build.XXXXXX)
@@ -32,7 +32,7 @@ mkdir -p "$BUILD_DIR/srv"
 
 # Копирование с сохранением исходных прав (флаг -a сохраняет timestamps, права и ссылки)
 echo "Копирование файлов проекта с сохранением прав..."
-cp -a "$SOURCE_DIR" "$BUILD_DIR/srv/"
+rsync -av --exclude="roles/vlab/files/images" --exclude="roles/vlab/files/distros" "$SOURCE_DIR" "$BUILD_DIR/srv/"
 
 # Создание манифеста пакета (control)
 echo "Создание файла DEBIAN/control..."

@@ -56,3 +56,7 @@ ansible-playbook init_user.yml -e "host=lws-01 user=ivanov"
 ```
 ansible-playbook clean_user.yml -e "host=lws-01 user=petrov"
 ```
+
+## Создание образов дисков
+qemu-img create -f qcow2 arm-abi.qcow2 16G
+qemu-img create -f qcow2 srv-szi.qcow2 32G
