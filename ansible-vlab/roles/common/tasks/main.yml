@@ -1,11 +1,12 @@
 ---
 - name: Проверка и генерация SSH-ключа RSA на localhost
-  openssh_keypair:
-    path: "~/.ssh/id_rsa"
-    type: rsa
-    size: 4096
+  command: >
+    ssh-keygen -t rsa -b 4096 -f {{ lookup('env', 'HOME') }}/.ssh/id_rsa -N ""
+  args:
+    creates: "~/.ssh/id_rsa"
   delegate_to: localhost
   become: false
+  run_once: true
 
 - name: Добавление SSH-ключа в доверенные
   authorized_key:
