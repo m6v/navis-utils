@@ -92,15 +92,15 @@ while true; do
 
     if [ "$choice" -eq 6 ]; then
         # Проверить наличие файла справки в текущем каталоге
-        if [ -f "README.md" ]; then
+        if [ -f "help.txt" ]; then
             whiptail --title "Справка" \
                      --backtitle "$HINT" \
                      --scrolltext \
-                     --textbox "README.md" 20 75
+                     --textbox "help.txt" 20 75
         else
             whiptail --title "Ошибка" \
                      --backtitle "$HINT" \
-                     --msgbox "Файл README.md не найден в текущем каталоге!" 8 50
+                     --msgbox "Файл help.txt не найден в текущем каталоге!" 8 50
         fi
         continue
     fi
