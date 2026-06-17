@@ -43,12 +43,6 @@ select_host_from_inventory() {
     [ -z "$host" ] && return 1 || return 0
 }
 
-# Функция запроса имени пользователя
-prompt_user_name() {
-    user=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Ввод" --cancel-button "Назад" --inputbox "Введите имя пользователя:" 10 55 "" 3>&1 1>&2 2>&3) || return 1
-    [ -z "$user" ] && return 1 || return 0
-}
-
 # Функция подготовки аргументов и запуска ansible-playbook
 run_ansible() {
     local playbook=$1
@@ -70,6 +64,44 @@ run_ansible() {
     
     read -n 1 -s -r -p "Нажмите любую клавишу..."
 }
+
+# Функция запроса имени пользователя
+prompt_user_name() {
+    user=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Ввод" --cancel-button "Назад" --inputbox "Введите имя пользователя:" 10 55 "" 3>&1 1>&2 2>&3) || return 1
+    [ -z "$user" ] && return 1 || return 0
+}
+
+# Функция запроса учетных данных для подключения по SSH и SUDO
+prompt_credentials() {
+    local default_user="${1:-administrator}"
+    SSH_USER=""
+    SSH_PASS=""
+    # Запрос имени пользователя SSH
+    if ! SSH_USER=$(whiptail --title "Авторизация Ansible" \
+        --backtitle "$HINT" \
+        --ok-button "Далее" --cancel-button "Выход" \
+        --inputbox "Логин для удаленного подключения по SSH:" 10 60 "$default_user" \
+        3>&1 1>&2 2>&3); then
+        # Сюда скрипт попадет при нажатии на Выход или Esc
+        clear
+        exit 0
+    fi
+    # Восстановление дефолтного логина при пустом значении
+    [ -z "$SSH_USER" ] && SSH_USER="$default_user"
+
+    # Запрос пароля
+    if ! SSH_PASS=$(whiptail --title "Авторизация Ansible" \
+        --backtitle "$HINT" \
+        --ok-button "Далее" --cancel-button "Выход" \
+        --passwordbox "Пароль для удаленного подключения по SSH (оставьте пустым для использования SSH-ключей):" 11 60 \
+        3>&1 1>&2 2>&3); then
+        # Сюда скрипт попадет при нажатии на Выход или Esc
+        clear
+        exit 0
+    fi
+}
+
+prompt_credentials "administrator"
 
 # Главный цикл панели управления
 while true; do
