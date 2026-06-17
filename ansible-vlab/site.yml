@@ -1,12 +1,21 @@
 ---
+# Запрос имени и пароля администратора
+- import_playbook: prompt.yml
+
 - name: Развертывание среды виртуализации
   hosts: "{{ host | default('class', true) }}"
-  gather_facts: true
+  # Отключение автоматического сбора фактов при старте
+  gather_facts: false
   become: true
 
   environment:
-    # Настройка полностью молчаливого режима рабрты apt
+    # Настройка полностью молчаливого режима работы apt
     DEBIAN_FRONTEND: noninteractive
+
+  # Сбор фактов под введенным или дефолтным remote_user
+  pre_tasks:
+    - name: Сбор фактов о системе
+      setup:
 
   roles:
     - common

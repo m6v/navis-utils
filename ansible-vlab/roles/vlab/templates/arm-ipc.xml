@@ -31,7 +31,8 @@
     <disk type='volume' device='disk'>
       <driver name='qemu' type='qcow2' cache='writeback'/>
       <source pool='{{ user_pool_name }}' volume='{{ item }}.qcow2'/>
-      <target dev='vda' bus='virtio'/>
+      <target dev='sda' bus='sata'/>
+      <address type="drive" controller="0" bus="0" target="0" unit="0"/>
     </disk>
 
     <disk type='file' device='cdrom'>
