@@ -3,6 +3,7 @@
   apt:
     name:
       - qemu-kvm
+      - qemu-guest-agent
       - libvirt-daemon-system
       - virt-manager
     state: present

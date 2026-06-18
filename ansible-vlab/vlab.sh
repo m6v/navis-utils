@@ -53,7 +53,7 @@ run_ansible() {
     # Массив аргументов
     local ansible_args=()
 
-    # Добавляние базовых переменных host и user
+    # Добавление переменных host и user
     if [ -n "$user" ]; then
         ansible_args+=("-e" "host=$host user=$user")
     elif [ "$host" != "ALL" ]; then
@@ -159,7 +159,7 @@ while true; do
 
     # Индивидуальное исключение для подтверждения удаления (пункт 3)
     if [ "$choice" -eq 5 ]; then
-        whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user_name' на хосте '$host'?" 10 60 || continue
+        whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user_name' на '$host'?" 10 60 || continue
     fi
 
     run_ansible "$playbook" "$user_name"
