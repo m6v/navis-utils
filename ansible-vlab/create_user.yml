@@ -1,6 +1,6 @@
 ---
 # Запрос имени и пароля администратора
-- import_playbook: prompt.yml
+# - import_playbook: prompt.yml
 
 - name: Оркестрация создания учетной записи обучаемого
   hosts: "{{ host }}"

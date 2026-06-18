@@ -45,69 +45,74 @@ select_host_from_inventory() {
 
 # Функция подготовки аргументов и запуска ansible-playbook
 run_ansible() {
-    local playbook=$1
-    local user=$2
-    local parms=""
-
-    clear
+    local playbook="$1"
+    local user="$2"
     
-    # Формирование готовой строки параметров запуска
+    clear
+
+    # Массив аргументов
+    local ansible_args=()
+
+    # Добавляние базовых переменных host и user
     if [ -n "$user" ]; then
-        parms="-e 'host=$host user=$user'"
-    else
-        [ "$host" != "ALL" ] && parms="-e 'host=$host'"
+        ansible_args+=("-e" "host=$host user=$user")
+    elif [ "$host" != "ALL" ]; then
+        ansible_args+=("-e" "host=$host")
     fi
 
-    # Одинарные кавычки защищают синтаксис команды,
-    # двойные раскрывают переменные без экранирования слэшами
-    eval 'ansible-playbook "'"$playbook"'" '"$parms" || true
+    # Добавление параметров авторизации ssh и sudo
+    ansible_args+=("-e" "ansible_user=$ansible_user ansible_password=$ansible_password ansible_sudo_pass=$ansible_password")
+
+    # Запуск ansible-playbook с передачей элементов массива ansible_args как отдельных независимых аргументов
+    ansible-playbook "$playbook" "${ansible_args[@]}" || true
     
     read -n 1 -s -r -p "Нажмите любую клавишу..."
 }
 
 # Функция запроса имени пользователя
 prompt_user_name() {
-    user=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Ввод" --cancel-button "Назад" --inputbox "Введите имя пользователя:" 10 55 "" 3>&1 1>&2 2>&3) || return 1
-    [ -z "$user" ] && return 1 || return 0
+    # Если указан первый аргумент, использовать его как дефолтный логин 
+    user_name="${1:-}"
+    while true; do
+        if user_name=$(whiptail --title "$TITLE" \
+            --backtitle "$HINT" \
+            --ok-button "Ввод" \
+            --cancel-button "Отмена" \
+            --inputbox "\nВведите логин пользователя:" 10 55 "$user_name" \
+            3>&1 1>&2 2>&3); then
+            # Обработка нажатия "Ввод"
+            [ -n "$user_name" ] && return 0
+            # Уход на новую итерацию, если ввод пустой
+            user_name=""
+        else
+            # Обработка нажатия "Отмена" или "Esc"
+            return 1
+        fi
+    done
 }
 
-# Функция запроса учетных данных для подключения по SSH и SUDO
-prompt_credentials() {
-    local default_user="${1:-administrator}"
-    SSH_USER=""
-    SSH_PASS=""
-    # Запрос имени пользователя SSH
-    if ! SSH_USER=$(whiptail --title "Авторизация Ansible" \
+prompt_user_pass() {
+    user_pass=$(whiptail --title "$TITLE" \
         --backtitle "$HINT" \
-        --ok-button "Далее" --cancel-button "Выход" \
-        --inputbox "Логин для удаленного подключения по SSH:" 10 60 "$default_user" \
-        3>&1 1>&2 2>&3); then
-        # Сюда скрипт попадет при нажатии на Выход или Esc
-        clear
-        exit 0
-    fi
-    # Восстановление дефолтного логина при пустом значении
-    [ -z "$SSH_USER" ] && SSH_USER="$default_user"
-
-    # Запрос пароля
-    if ! SSH_PASS=$(whiptail --title "Авторизация Ansible" \
-        --backtitle "$HINT" \
-        --ok-button "Далее" --cancel-button "Выход" \
-        --passwordbox "Пароль для удаленного подключения по SSH (оставьте пустым для использования SSH-ключей):" 11 60 \
-        3>&1 1>&2 2>&3); then
-        # Сюда скрипт попадет при нажатии на Выход или Esc
-        clear
-        exit 0
-    fi
+        --ok-button "Далее" \
+        --cancel-button "Отмена" \
+         --passwordbox "\nВведите пароль пользователя:" 10 55 \
+        3>&1 1>&2 2>&3) || return 1
+    # [ -z "$user_pass" ] && return 1 || return 0
+    return 0
 }
 
-prompt_credentials "administrator"
+prompt_user_name "administrator"
+prompt_user_pass
+
+ansible_user=$user_name
+ansible_password=$user_pass
 
 # Главный цикл панели управления
 while true; do
     # Инициализация и принудительный сброс параметров перед каждым действием
     host=""
-    user=""
+    user_name=""
 
     choice=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Выбрать" --cancel-button "Выход" --menu "\nВыберите действие:" 15 65 6 \
         "1" "Инициализировать среду виртуализации" \
@@ -154,8 +159,8 @@ while true; do
 
     # Индивидуальное исключение для подтверждения удаления (пункт 3)
     if [ "$choice" -eq 5 ]; then
-        whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user' на хосте '$host'?" 10 60 || continue
+        whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user_name' на хосте '$host'?" 10 60 || continue
     fi
 
-    run_ansible "$playbook" "$user"
+    run_ansible "$playbook" "$user_name"
 done
