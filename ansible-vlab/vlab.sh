@@ -43,6 +43,46 @@ select_host_from_inventory() {
     [ -z "$host" ] && return 1 || return 0
 }
 
+# Функция выбора хоста из инвентаря с использованием checklist
+select_host_from_inventory_with_checklist() {
+    local menu_options=()
+
+    while read -r name ip; do
+        [ -n "$name" ] && [ -n "$ip" ] && menu_options+=("$name" "$ip" "off")
+    done < <(awk -F'[ =]' '$2 == "ansible_host" { print $1, $3 }' "$INVENTORY_FILE")
+
+    # Бэкапим старые цвета. Символы :- спасают от ошибки "не заданы границы переменной"
+    local old_newt_colors="${NEWT_COLORS:-}"
+
+    # Задаем цвета одной строкой
+    export NEWT_COLORS='window=black,lightgray listbox=black,lightgray actlistbox=white,blue checkbox=black,lightgray actcheckbox=white,blue'
+
+    local choices
+    choices=$(whiptail --title "$TITLE" \
+                       --backtitle "$HINT" \
+                       --ok-button "Выбрать" \
+                       --cancel-button "Назад" \
+                       --checklist "Выберите целевые хосты:" \
+                       18 65 10 \
+                       "${menu_options[@]}" \
+                       3>&1 1>&2 2>&3)
+    
+    local ret=$?
+
+    # Восстанавливаем окружение в исходное состояние
+    if [ -n "$old_newt_colors" ]; then
+        export NEWT_COLORS="$old_newt_colors"
+    else
+        unset NEWT_COLORS
+    fi
+
+    # Если нажали "Назад" или закрыли окно
+    [ $ret -ne 0 ] || [ -z "$choices" ] && return 1
+
+    eval "selected_hosts=($choices)"
+    return 0
+}
+
 # Функция подготовки аргументов и запуска ansible-playbook
 run_ansible() {
     local playbook="$1"
