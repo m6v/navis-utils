@@ -1,10 +1,7 @@
 ---
-# Запрос имени и пароля администратора
-# - import_playbook: prompt.yml
-
 - name: Развертывание среды виртуализации
-  hosts: "{{ host | default('class', true) }}"
-  # Отключение автоматического сбора фактов при старте
+  # Цель всегда all, а фильтрацию делает флаг -l со списком хостов
+  hosts: all
   gather_facts: false
   become: true
 

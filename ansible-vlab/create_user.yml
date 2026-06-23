@@ -2,25 +2,15 @@
 - name: Оркестрация создания учетной записи обучаемого
   hosts: all
   become: true
+  gather_facts: false
+  any_errors_fatal: false
 
-  # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Возвращаем переменную host для старых проверок.
-  # Теперь на хосте iws переменная host будет равна "iws", а на lws-01 — "lws-01".
-  vars:
-    host: "{{ inventory_hostname }}"
-
-  # Сначала проверяем ввод и спрашиваем пароли на localhost
   pre_tasks:
-    - name: Валидация входных параметров (наличие host и user)
+    - name: Валидация входных параметров (наличие user)
       fail:
-        msg: "Ошибка! Не задан параметр host и/или user. Пример: -e 'host=lws-01 user=ivanov'"
-      # Теперь host определен динамически, и эта проверка не упадет ложно
-      when: (user is not defined) or (host is not defined)
+        msg: "Ошибка! Не задан параметр user. Пример в скрипте: -e 'user=ivanov'"
+      when: user is not defined or user | length == 0
       run_once: true
-
-    - name: Проверка наличия хоста в файле инвентаря
-      fail:
-        msg: "Ошибка! Хост '{{ host }}' не найден в вашем файле инвентаря"
-      when: host not in groups['all']
 
     - name: Проверка наличия пользователя на целевом хосте
       getent:
@@ -35,9 +25,9 @@
     # Интерактивный запрос пароля для нового обучаемого
     - name: Интерактивный запрос пароля для нового обучаемого
       pause:
-        prompt: "Введите пароль для создания пользователя {{ user }} на выбранных хостах"
+        prompt: "Введите пароль пользователя {{ user }}, создаваемого на выбранных хостах"
         echo: false
-      register: global_password_input
+      register: entered_password
       delegate_to: localhost
       become: false
       run_once: true
@@ -46,7 +36,7 @@
       pause:
         prompt: "Повторите пароль для подтверждения"
         echo: false
-      register: global_password_confirm
+      register: confirmed_password
       delegate_to: localhost
       become: false
       run_once: true
@@ -54,13 +44,13 @@
     - name: Проверка совпадения введенных паролей
       fail:
         msg: "Ошибка! Введенные пароли не совпадают. Перезапустите плейбук"
-      when: global_password_input.user_input != global_password_confirm.user_input
+      when: entered_password.user_input != confirmed_password.user_input
       run_once: true
 
-    # Расшариваем введенный пароль на все целевые хосты в сессии
+    # Использовать введенный пароль на всех целевых хостах в сессии
     - name: Проброс пароля на все целевые хосты
       set_fact:
-        shared_password: "{{ hostvars[ansible_play_hosts[0]]['global_password_input']['user_input'] | default(omit) }}"
+        shared_password: "{{ hostvars[ansible_play_hosts[0]]['entered_password']['user_input'] | default(omit) }}"
 
   roles:
     - role: users

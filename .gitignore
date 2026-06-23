@@ -27,6 +27,9 @@ main.spec
 # Geany projects
 *.geany
 
+# Kate retry
+*.retry
+
 # Large media files
 *.mp4
 *.tiff
