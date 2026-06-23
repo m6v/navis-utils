@@ -28,8 +28,14 @@ PLAYBOOKS=(
     "delete_user.yml"
 )
 
-# Функция выбора хостов из инвентаря
+# Функция отображения меню выбора хостов из инвентаря (тип меню в первом аргументе)
 select_host_from_inventory() {
+    # По умолчанию использовать тип меню --radiolist
+    local menu_type=${1:-}
+    if [[ "$menu_type" != "--checklist" ]]; then
+        menu_type="--radiolist"
+    fi
+
     local menu_options=()
     # Замена палитры элементов выбора
     export NEWT_COLORS="checkbox=black,lightgray"
@@ -42,7 +48,7 @@ select_host_from_inventory() {
                      --backtitle "$HINT" \
                      --ok-button "Выбрать" \
                      --cancel-button "Назад" \
-                     --checklist "Выберите целевые хосты:" \
+                     $menu_type "Выберите целевые хосты:" \
                      18 65 10 \
                      "${menu_options[@]}" \
                      3>&1 1>&2 2>&3)  || return 1
@@ -121,7 +127,7 @@ prompt_user_pass() {
         --backtitle "$HINT" \
         --ok-button "Далее" \
         --cancel-button "Отмена" \
-         --passwordbox "\nВведите пароль пользователя:" 10 55 \
+        --passwordbox "\nВведите пароль пользователя:" 10 55 \
         3>&1 1>&2 2>&3) || return 1
     # [ -z "$user_pass" ] && return 1 || return 0
     return 0
@@ -171,16 +177,20 @@ while true; do
     # Чтение имени плейбука по индексу выбранного пункта меню
     playbook="${PLAYBOOKS[$choice]}"
     
-    # Определение необходимости выбора имени пользователя по имени плейбука
-    # (в плейбуках, содержащих user в названии, требуется задать пользователя)
-    if [[ "$playbook" == *"user"* ]]; then
-        is_user_required=true
-    else
-        is_user_required=false
-    fi
+    # Определение типа меню выбора хоста и необходимости выбора имени пользователя
+    case "$choice" in
+        "2"|"3"|"4"|"5")
+            menu_type="--radiolist"
+            is_user_required=true
+            ;;
+        *)
+            menu_type="--checklist"
+            is_user_required=false
+            ;;
+    esac
 
     # Если хост(ы) не выбран(ы) переход в главное меню
-    select_host_from_inventory || continue
+    select_host_from_inventory $menu_type || continue
     # Вызов диалога с запросом имени пользователя, если оно требуется
     [ "$is_user_required" = true ] && { prompt_user_name || continue; }
 
