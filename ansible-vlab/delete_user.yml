@@ -1,36 +1,26 @@
 ---
-# Запрос имени и пароля администратора
-# - import_playbook: prompt.yml
-
 - name: Оркестрация удаления учетной записи обучаемого
-  hosts: "{{ host }}"
+  hosts: all  # Фильтрация полностью управляется вашим флагом -l в bash
   become: true
+  gather_facts: false
+  any_errors_fatal: false
+
+  # ВОЗВРАЩАЕМ СОВМЕСТИМОСТЬ С РОЛЯМИ:
+  # Каждому хосту в сессии присваиваем переменную host, равную его собственному имени.
+  vars:
+    host: "{{ inventory_hostname }}"
 
   pre_tasks:
-    - name: Валидация входных параметров (наличие host и user)
+    - name: Валидация входных параметров (наличие user)
       fail:
-        msg: "Ошибка! Не задан параметр host и/или user. Пример: -e 'host=lws-01 user=ivanov'"
-      when: (user is not defined) or (host is not defined)
-      run_once: true
+        msg: "Ошибка! Не задан параметр user. Пример: -e 'user=ivanov'"
+      when: user is not defined or user | length == 0
+      run_once: true # Достаточно проверить один раз для всего запуска
 
-    - name: Проверка наличия хоста в файле инвентаря
+    - name: Проверка наличия текущего хоста в инвентаре
       fail:
-        msg: "Ошибка! Хост '{{ host }}' не найден в файле инвентаря"
-      when: host not in groups['all']
-
-    - name: Проверка существования пула для пользователя {{ user }}
-      command: "virsh pool-info {{ user }}"
-      register: pool_check
-      # Игнорировать ошибку, если пула нет (virsh вернет code > 0)
-      failed_when: false
-       # Задача только читает данные, ничего не меняя
-      changed_when: false
-
-    - name: Прерывание плейбука, если пул пользователя существует
-      fail:
-        msg: "Прерывание! Пул для пользователя '{{ user }}' существует. Удалите пул и повторите попытку"
-       # Если rc == 0, значит команда virsh выполнилась успешно и пул найден
-      when: pool_check.rc == 0
+        msg: "Ошибка! Хост '{{ inventory_hostname }}' не найден в файле инвентаря"
+      when: inventory_hostname not in groups['all']
 
   roles:
     - role: users

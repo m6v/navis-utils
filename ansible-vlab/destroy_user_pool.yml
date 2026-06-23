@@ -1,24 +1,26 @@
 ---
-# Запрос имени и пароля администратора
-# - import_playbook: prompt.yml
-
-- name: Проверка входных параметров
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Валидация входных параметров (наличие host и user)
-      fail:
-        msg: "Ошибка! Вы должны передать параметры host и user. Пример: -e 'host=lws-01 user=ivanov'"
-      when: (user is not defined) or (host is not defined)
-
-    - name: Проверка, что указанный хост существует в файле инвентаря
-      fail:
-        msg: "Ошибка! Хост '{{ host }}' не найден в вашем файле инвентаря. Проверьте правильность написания."
-      when: (host is defined) and (host not in groups['all'])
-
 - name: Уничтожение пользовательского пула и виртуальных машин
-  hosts: "{{ host }}"
+  hosts: all  # Фильтрация теперь полностью управляется вашим флагом -l в bash
   become: true
+  gather_facts: false
+  any_errors_fatal: false
+
+  # ВОЗВРАЩАЕМ СОВМЕСТИМОСТЬ С РОЛЯМИ:
+  # Каждому хосту в сессии присваиваем переменную host, равную его собственному имени.
+  vars:
+    host: "{{ inventory_hostname }}"
+
+  pre_tasks:
+    - name: Валидация входных параметров (наличие user)
+      fail:
+        msg: "Ошибка! Вы должны передать параметр user. Пример: -e 'user=ivanov'"
+      when: user is not defined or user | length == 0
+      run_once: true # Проверяем всего один раз на старте
+
+    - name: Проверка, что текущий хост существует в файле инвентаря
+      fail:
+        msg: "Ошибка! Хост '{{ inventory_hostname }}' не найден в вашем файле инвентаря. Проверьте правильность написания."
+      when: inventory_hostname not in groups['all']
 
   roles:
     - role: vlab

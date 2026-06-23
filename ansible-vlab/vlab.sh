@@ -28,85 +28,70 @@ PLAYBOOKS=(
     "delete_user.yml"
 )
 
-# Функция выбора хоста из инвентаря
+# Функция выбора хостов из инвентаря
 select_host_from_inventory() {
     local menu_options=()
-    
-    # Пункт "ALL" доступен только для плейбуков, не привязанных к конкретному пользователю
-    [ "$is_user_required" = false ] && menu_options+=("ALL" "Все хосты")
-
-    while read -r name ip; do
-        [ ! -z "$name" ] && [ ! -z "$ip" ] && menu_options+=("$name" "$ip")
-    done < <(awk -F'[ =]' '$2 == "ansible_host" { print $1, $3 }' "$INVENTORY_FILE")
-
-    host=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Выбрать" --cancel-button "Назад" --menu "Выберите целевой хост:" 18 65 10 "${menu_options[@]}" 3>&1 1>&2 2>&3) || return 1
-    [ -z "$host" ] && return 1 || return 0
-}
-
-# Функция выбора хоста из инвентаря с использованием checklist
-select_host_from_inventory_with_checklist() {
-    local menu_options=()
+    # Замена палитры элементов выбора
+    export NEWT_COLORS="checkbox=black,lightgray"
 
     while read -r name ip; do
         [ -n "$name" ] && [ -n "$ip" ] && menu_options+=("$name" "$ip" "off")
     done < <(awk -F'[ =]' '$2 == "ansible_host" { print $1, $3 }' "$INVENTORY_FILE")
 
-    # Бэкапим старые цвета. Символы :- спасают от ошибки "не заданы границы переменной"
-    local old_newt_colors="${NEWT_COLORS:-}"
-
-    # Задаем цвета одной строкой
-    export NEWT_COLORS='window=black,lightgray listbox=black,lightgray actlistbox=white,blue checkbox=black,lightgray actcheckbox=white,blue'
-
-    local choices
-    choices=$(whiptail --title "$TITLE" \
-                       --backtitle "$HINT" \
-                       --ok-button "Выбрать" \
-                       --cancel-button "Назад" \
-                       --checklist "Выберите целевые хосты:" \
-                       18 65 10 \
-                       "${menu_options[@]}" \
-                       3>&1 1>&2 2>&3)
-    
-    local ret=$?
-
-    # Восстанавливаем окружение в исходное состояние
-    if [ -n "$old_newt_colors" ]; then
-        export NEWT_COLORS="$old_newt_colors"
-    else
-        unset NEWT_COLORS
-    fi
-
-    # Если нажали "Назад" или закрыли окно
-    [ $ret -ne 0 ] || [ -z "$choices" ] && return 1
-
-    eval "selected_hosts=($choices)"
+    hosts=$(whiptail --title "$TITLE" \
+                     --backtitle "$HINT" \
+                     --ok-button "Выбрать" \
+                     --cancel-button "Назад" \
+                     --checklist "Выберите целевые хосты:" \
+                     18 65 10 \
+                     "${menu_options[@]}" \
+                     3>&1 1>&2 2>&3)  || return 1
+    # Удаление кавычек и замена пробелов на запятые
+    hosts=$(echo "$hosts" | tr -d '"' | tr ' ' ',')
+    [ -z "$hosts" ] && return 1
     return 0
 }
 
 # Функция подготовки аргументов и запуска ansible-playbook
 run_ansible() {
     local playbook="$1"
-    local user="$2"
-    
+    shift 1
+
+    local user=""
+    local hosts=""
+    # Разбор флагов с помощью getopts, -u (требует аргумент) и -l (требует аргумент)
+    local opt
+    # Обязательный сброс индекса для getopts перед каждым вызовом
+    OPTIND=1
+    while getopts "u:l:" opt; do
+        case "$opt" in
+            u) user="$OPTARG" ;;
+            l) hosts="$OPTARG" ;;
+            *) ;; # Пропуск неизвестных флагов
+        esac
+    done
+
     clear
 
-    # Массив аргументов
+    # Сборка аргументов в массив Ansible
     local ansible_args=()
+    ansible_args+=("-e" "ansible_user=$ansible_user")
+    ansible_args+=("-e" "ansible_password=$ansible_password")
+    ansible_args+=("-e" "ansible_sudo_pass=$ansible_password")
 
-    # Добавление переменных host и user
+    # Добавление аргумента user, если $user не пустая
     if [ -n "$user" ]; then
-        ansible_args+=("-e" "host=$host user=$user")
-    elif [ "$host" != "ALL" ]; then
-        ansible_args+=("-e" "host=$host")
+        ansible_args+=("-e" "user=$user")
     fi
 
-    # Добавление параметров авторизации ssh и sudo
-    ansible_args+=("-e" "ansible_user=$ansible_user ansible_password=$ansible_password ansible_sudo_pass=$ansible_password")
+    # Передача строки хостов в ограничение Ansible
+    ansible_args+=("-l$hosts")
 
-    # Запуск ansible-playbook с передачей элементов массива ansible_args как отдельных независимых аргументов
+    # Запуск плейбука
     ansible-playbook "$playbook" "${ansible_args[@]}" || true
-    
+
     read -n 1 -s -r -p "Нажмите любую клавишу..."
+    echo
 }
 
 # Функция запроса имени пользователя
@@ -142,6 +127,7 @@ prompt_user_pass() {
     return 0
 }
 
+# Вызов начальных диалогов
 prompt_user_name "administrator"
 prompt_user_pass
 
@@ -168,7 +154,7 @@ while true; do
     fi
 
     if [ "$choice" -eq 6 ]; then
-        # Проверить наличие файла справки в текущем каталоге
+        # Проверка наличия файла справки в текущем каталоге
         if [ -f "help.txt" ]; then
             whiptail --title "Справка" \
                      --backtitle "$HINT" \
@@ -193,14 +179,15 @@ while true; do
         is_user_required=false
     fi
 
-    # Конвейер шагов интерфейса
+    # Если хост(ы) не выбран(ы) переход в главное меню
     select_host_from_inventory || continue
+    # Вызов диалога с запросом имени пользователя, если оно требуется
     [ "$is_user_required" = true ] && { prompt_user_name || continue; }
 
-    # Индивидуальное исключение для подтверждения удаления (пункт 3)
+    # Индивидуальное исключение для подтверждения удаления пользователя
     if [ "$choice" -eq 5 ]; then
         whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user_name' на '$host'?" 10 60 || continue
     fi
-
-    run_ansible "$playbook" "$user_name"
+    # Вызов функции-обертки для запуска плейбука $playbook над хостами $hosts
+    run_ansible "$playbook" -u "$user_name" -l "$hosts"
 done

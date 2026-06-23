@@ -18,12 +18,12 @@
   when: not is_user_pool_exist
 
 - name: Регистрация, запуск и добавление пользовательского пула в автозагрузку
-  command: "{{ item }}"
-  with_items:
-    - "virsh pool-define-as {{ user_pool_name }} dir --target {{ user_pool_path }}"
-    - "virsh pool-start {{ user_pool_name }}"
-    - "virsh pool-autostart {{ user_pool_name }}"
-    - "virsh pool-refresh {{ user_pool_name }}"
+  # Используем shell вместо command, чтобы работали пайпы и кавычки утилиты sg
+  shell: |
+    sg libvirt-admin -c "virsh pool-define-as {{ user_pool_name }} dir --target {{ user_pool_path }}"
+    sg libvirt-admin -c "virsh pool-start {{ user_pool_name }}"
+    sg libvirt-admin -c "virsh pool-autostart {{ user_pool_name }}"
+    sg libvirt-admin -c "virsh pool-refresh {{ user_pool_name }}"
   when: not is_user_pool_exist
 
 - name: Поиск базовых образов qcow2 в системном пуле хранения

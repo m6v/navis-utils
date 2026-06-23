@@ -1,18 +1,21 @@
 ---
-# Запрос имени и пароля администратора
-# - import_playbook: prompt.yml
-
 - name: Оркестрация создания учетной записи обучаемого
-  hosts: "{{ host }}"
+  hosts: all
   become: true
+
+  # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Возвращаем переменную host для старых проверок.
+  # Теперь на хосте iws переменная host будет равна "iws", а на lws-01 — "lws-01".
+  vars:
+    host: "{{ inventory_hostname }}"
 
   # Сначала проверяем ввод и спрашиваем пароли на localhost
   pre_tasks:
     - name: Валидация входных параметров (наличие host и user)
       fail:
         msg: "Ошибка! Не задан параметр host и/или user. Пример: -e 'host=lws-01 user=ivanov'"
+      # Теперь host определен динамически, и эта проверка не упадет ложно
       when: (user is not defined) or (host is not defined)
-      run_once: true # Достаточно проверить один раз, а не для каждого хоста
+      run_once: true
 
     - name: Проверка наличия хоста в файле инвентаря
       fail:
@@ -29,36 +32,38 @@
       set_fact:
         is_user_exist: "{{ getent_passwd[user] is defined and getent_passwd[user] is sequence }}"
 
+    # Интерактивный запрос пароля для нового обучаемого
     - name: Интерактивный запрос пароля для нового обучаемого
       pause:
-        prompt: "Введите пароль для создания пользователя {{ user }} на хосте {{ inventory_hostname }}"
+        prompt: "Введите пароль для создания пользователя {{ user }} на выбранных хостах"
         echo: false
-      register: password_input
+      register: global_password_input
       delegate_to: localhost
       become: false
-      # Запрос пароля только если пользователь не зарегистрирован
-      when: not is_user_exist
+      run_once: true
 
     - name: Интерактивный запрос подтверждения пароля
       pause:
         prompt: "Повторите пароль для подтверждения"
         echo: false
-      register: password_confirm
+      register: global_password_confirm
       delegate_to: localhost
       become: false
-      # Запрос подтверждения пароля только если пользователь не зарегистрирован
-      when: not is_user_exist
+      run_once: true
 
     - name: Проверка совпадения введенных паролей
       fail:
         msg: "Ошибка! Введенные пароли не совпадают. Перезапустите плейбук"
-      when: 
-        - not is_user_exist
-        - password_input.user_input != password_confirm.user_input
+      when: global_password_input.user_input != global_password_confirm.user_input
+      run_once: true
+
+    # Расшариваем введенный пароль на все целевые хосты в сессии
+    - name: Проброс пароля на все целевые хосты
+      set_fact:
+        shared_password: "{{ hostvars[ansible_play_hosts[0]]['global_password_input']['user_input'] | default(omit) }}"
 
   roles:
     - role: users
       vars:
         user_action: create
-        # Передача пароля, только если он был введен, иначе пустого значения/omit
-        user_password: "{{ password_input.user_input if not is_user_exist else omit }}"
+        user_password: "{{ shared_password if not is_user_exist else omit }}"

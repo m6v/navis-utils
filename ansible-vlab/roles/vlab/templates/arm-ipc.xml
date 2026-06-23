@@ -37,8 +37,11 @@
 
     <disk type='file' device='cdrom'>
       <driver name='qemu' type='raw'/>
-      <target dev='sda' bus='sata'/>
+      <!-- ИСПРАВЛЕНО: Изменено sda на sdb -->
+      <target dev='sdb' bus='sata'/>
       <readonly/>
+      <!-- ИСПРАВЛЕНО: Добавлен уникальный адрес на контроллере (unit="1") -->
+      <address type="drive" controller="0" bus="0" target="0" unit="1"/>
     </disk>
 
     <interface type='network'>
