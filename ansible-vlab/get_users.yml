@@ -1,18 +1,6 @@
 ---
-# Запрос имени и пароля администратора
-# - import_playbook: prompt.yml
-
-- name: Проверка входных параметров
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Проверка, что указанный хост или группа существуют в инвентаре
-      fail:
-        msg: "Ошибка! Хост или группа '{{ host }}' не найдены в вашем файле инвентаря."
-      when: (host is defined) and (host not in groups and host not in groups['all'])
-
 - name: Получение списка зарегистрированных обучаемых
-  hosts: "{{ host | default('class') }}"
+  hosts: all
   become: false
   gather_facts: false
 
@@ -24,8 +12,3 @@
       register: grep_output
       changed_when: false
 
-    - name: Вывод списка пользователей в консоль
-      debug:
-        msg: >-
-          На хосте '{{ inventory_hostname }}' обнаружены обучаемые:
-          {{ grep_output.stdout if grep_output.stdout != '' else 'Пользователи не найдены' }}
