@@ -134,8 +134,8 @@ prompt_user_pass() {
     return 0
 }
 
-# Вызов начальных диалогов
-prompt_user_name "administrator"
+# В качестве дефолтного имени используется имя учетной записи с наименьшим id, входящей в группу astra-admin
+prompt_user_name $(grep -E $(getent group "astra-admin" | cut -d: -f4) /etc/passwd | sort -t: -k3,3n | head -n1 | cut -d: -f1)
 prompt_user_pass
 
 ansible_user=$user_name

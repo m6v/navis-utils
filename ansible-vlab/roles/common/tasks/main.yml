@@ -10,7 +10,7 @@
 
 - name: Добавление SSH-ключа в доверенные
   authorized_key:
-    user: administrator
+    user: "{{ ansible_user }}"
     key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_rsa.pub') }}"
     state: present
 

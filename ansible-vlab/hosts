@@ -9,7 +9,7 @@ iws ansible_host=127.0.0.1  ansible_connection=local
 
 # Рабочие места обучаемых (Learner Workstations)
 [learners]
-lws-01 ansible_host=192.168.1.128
+lws-01 ansible_host=192.168.1.11
 lws-02 ansible_host=192.168.1.12
 lws-03 ansible_host=192.168.1.13
 lws-04 ansible_host=192.168.1.14
