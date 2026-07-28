@@ -47,3 +47,6 @@ main.spec
 # Temporary files
 tmp/
 *.tmp
+
+# Backup files
+*.bak
