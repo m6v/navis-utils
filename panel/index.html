@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>УТК-СЗИ</title>
+    <style>
+        /* Базовые переменные для СВЕТЛОЙ темы */
+        :root {
+            --pve-orange: #f26522;
+            --pve-dark: #34495e;
+            --sidebar-bg: #f4f6f7;
+            --sidebar-hover: #e8ecef;
+            --node-offline: #b0bfc6;
+            --node-active: #5a6a75;
+            --vm-offline: #d1d8dc;
+            --vm-online: #718096;
+            --bg-main: #ffffff;
+            --bg-placeholder: #fafafa;
+            --border-color: #d2d6de;
+            --icon-brightness-node: 0.6;
+            --icon-brightness-vm: 0.55;
+            --font-size: 13px;
+        }
+
+        /* Переменные для ТЁМНОЙ темы */
+        body.dark-theme {
+            --pve-dark: #ffffff;
+            --sidebar-bg: #1e282c;
+            --sidebar-hover: #2c3b41;
+            --node-offline: #607d8b;
+            --node-active: #b0bec5;
+            --vm-offline: #475569;
+            --vm-online: #94a3b8;
+            --bg-main: #222d32;
+            --bg-placeholder: #29353a;
+            --border-color: #37474f;
+            --icon-brightness-node: 1.2;
+            --icon-brightness-vm: 1.1;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            background-color: var(--bg-main);
+            transition: background-color 0.2s;
+        }
+
+        /* Шапка комплекса (размер 14px) */
+        .top-bar {
+            height: 38px;
+            border-bottom: 3px solid var(--pve-orange);
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--pve-dark);
+            background-color: var(--bg-main);
+            position: relative;
+        }
+
+        /* Контейнер для кнопок управления */
+        .controls-wrapper {
+            position: absolute;
+            right: 15px;
+            display: flex;
+            gap: 5px;
+        }
+
+        /* Кнопки управления (Тема и Шрифт) */
+        .ctrl-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--pve-dark);
+            cursor: pointer;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ctrl-btn:hover {
+            background-color: var(--sidebar-hover);
+            border-color: #b8c7ce;
+        }
+
+        /* Главный контейнер */
+        .main-container {
+            display: flex;
+            height: calc(100% - 41px);
+        }
+
+        /* Боковая панель */
+        .sidebar {
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            font-size: var(--font-size);
+            user-select: none;
+            padding-top: 5px;
+            overflow-y: auto;
+            transition: font-size 0.15s ease;
+        }
+
+        /* Элементы дерева (Узлы и ВМ) */
+        .node-item, .vm-item {
+            padding: 8px 15px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--node-offline);
+        }
+
+        .node-item:hover, .vm-item:hover {
+            background-color: var(--sidebar-hover);
+        }
+
+        /* Иконка Узла */
+        .node-item::before {
+            content: "🗄️";
+            font-size: 1.15em;
+            filter: grayscale(1) brightness(0.8) opacity(0.3);
+        }
+
+        /* Состояние Узла (АКТИВЕН) */
+        .node-item.node-active {
+            color: var(--node-active);
+        }
+        .node-item.node-active::before {
+            filter: grayscale(1) brightness(var(--icon-brightness-node)) opacity(0.9);
+        }
+
+        /* Стрелка состояния узла */
+        .node-toggle {
+            display: inline-block;
+            width: 10px;
+            font-size: 0.8em;
+            color: var(--node-offline);
+            transition: transform 0.15s ease;
+        }
+        .node-item.collapsed .node-toggle {
+            transform: rotate(-90deg);
+        }
+
+        /* Список ВМ */
+        .vm-sublist {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+            transition: max-height 0.25s ease-out;
+            max-height: 400px;
+            background-color: var(--bg-main);
+        }
+        .vm-sublist.hidden {
+            max-height: 0 !important;
+        }
+
+        /* Элементы ВМ */
+        .vm-item {
+            padding-left: 42px;
+            color: var(--vm-offline);
+        }
+        .vm-item::before {
+            content: "🖥️";
+            font-size: 1em;
+            filter: grayscale(1) brightness(0.8) opacity(0.25);
+        }
+
+        /* Состояние ВМ (ВКЛЮЧЕНА) */
+        .vm-item.online {
+            color: var(--vm-online);
+        }
+        .vm-item.online::before {
+            filter: grayscale(1) brightness(var(--icon-brightness-vm)) opacity(0.85);
+        }
+
+        /* Активная выбранная строка */
+        .vm-item.active {
+            background-color: var(--pve-orange);
+            color: #ffffff !important;
+        }
+        .vm-item.active::before {
+            filter: brightness(0) invert(1) opacity(1) !important;
+        }
+
+        /* Основная область и фрейм */
+        .content-area, iframe {
+            flex-grow: 1;
+            height: 100%;
+        }
+        iframe {
+            border: none;
+            display: none;
+            width: 100%;
+        }
+
+        /* Заглушка приветствия */
+        .placeholder-view {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #7f8c8d;
+            background-color: var(--bg-placeholder);
+        }
+        .placeholder-view h2 {
+            margin: 0 0 10px 0;
+            font-weight: 300;
+        }
+    </style>
+</head>
+<body>
+
+<div class="top-bar">
+    Учебно-тренировочный комплекс СЗИ
+    
+    <div class="controls-wrapper">
+        <button class="ctrl-btn" onclick="changeFontSize(-1)" title="Уменьшить шрифт">A-</button>
+        <button class="ctrl-btn" onclick="changeFontSize(1)" title="Увеличить шрифт">A+</button>
+        <button class="ctrl-btn" onclick="toggleTheme()">🌓 Тема</button>
+    </div>
+</div>
+
+<div class="main-container">
+    <div class="sidebar">
+        <div id="pve-tree"></div>
+    </div>
+    <div class="content-area">
+        <div class="placeholder-view" id="pve-placeholder">
+            <h2>Добро пожаловать в панель инструктора</h2>
+            <p>Выберите виртуальную машину в дереве слева для вывода экрана.</p>
+        </div>
+        <iframe id="vnc-frame" src=""></iframe>
+    </div>
+</div>
+
+<script>
+    const noVncPort = 8085;
+    const treeContainer = document.getElementById('pve-tree');
+    const iframe = document.getElementById('vnc-frame');
+    const placeholder = document.getElementById('pve-placeholder');
+
+    // Восстановление сохранённого размера шрифта
+    let currentFontSize = parseInt(localStorage.getItem('pve-font-size')) || 13;
+    document.documentElement.style.setProperty('--font-size', `${currentFontSize}px`);
+
+    // Функция изменения размера шрифта в дереве ресурсов
+    function changeFontSize(direction) {
+        currentFontSize = Math.max(10, Math.min(20, currentFontSize + direction));
+        document.documentElement.style.setProperty('--font-size', `${currentFontSize}px`);
+        localStorage.setItem('pve-font-size', currentFontSize);
+    }
+
+    // Функция переключения тем (светлая / тёмная)
+    function toggleTheme() {
+        document.body.classList.toggle('dark-theme');
+        const isDark = document.body.classList.contains('dark-theme');
+        localStorage.setItem('pve-theme', isDark ? 'dark' : 'light');
+    }
+
+    // Восстановление сохранённой темы при загрузке страницы
+    if (localStorage.getItem('pve-theme') === 'dark') {
+        document.body.classList.add('dark-theme');
+    }
+
+    // Обработчик выбора виртуальной машины инструктором
+    function selectVM(element, token) {
+        document.querySelectorAll('.vm-item').forEach(el => el.classList.remove('active'));
+        element.classList.add('active');
+        placeholder.style.display = 'none';
+        iframe.style.display = 'block';
+        iframe.src = `http://localhost:${noVncPort}/vnc.html?path=websockify?token=${token}&autoconnect=true&resize=scale`;
+    }
+
+    // Функция ручного сворачивания/разворачивания узлов по клику
+    function toggleNode(nodeElement, sublistElement) {
+        nodeElement.classList.toggle('collapsed');
+        sublistElement.classList.toggle('hidden');
+    }
+
+    // Основная функция загрузки данных и перерисовки дерева
+    function loadTreeData() {
+        fetch('/api/tokens')
+            .then(response => response.json())
+            .then(data => {
+                // Запоминаем, какие узлы инструктор свернул или развернул вручную
+                const manualStates = {};
+                document.querySelectorAll('.node-item').forEach(el => {
+                    const titleEl = el.querySelector('span:not(.node-toggle)');
+                    if (titleEl) {
+                        manualStates[titleEl.innerText] = el.classList.contains('collapsed');
+                    }
+                });
+
+                // Очищаем дерево перед перерисовкой
+                treeContainer.innerHTML = '';
+                
+                Object.keys(data).forEach(nodeName => {
+                    const nodeIp = data[nodeName]["ip"];
+                    const vmsList = data[nodeName]["vms"];
+                    const nodeFullTitle = `${nodeName} (${nodeIp})`;
+                    
+                    const sublist = document.createElement('ul');
+                    sublist.className = 'vm-sublist';
+
+                    const node = document.createElement('div');
+                    node.className = 'node-item';
+                    node.innerHTML = `<span class="node-toggle">▼</span> <span>${nodeFullTitle}</span>`;
+                    node.onclick = function() { toggleNode(this, sublist); };
+                    
+                    let nodeHasActiveVms = false;
+
+                    vmsList.forEach(vmObject => {
+                        const tokenName = vmObject.token;
+                        const status = vmObject.status;
+                        
+                        const vmItem = document.createElement('li');
+                        vmItem.className = 'vm-item';
+                        
+                        // Если машина включена — добавляем класс подкраски
+                        if (status === 'online') {
+                            vmItem.classList.add('online');
+                            nodeHasActiveVms = true;
+                        }
+                        
+                        // Извлекаем "чистое" имя ВМ, отсекая префикс узла до первого дефиса
+                        const firstDashIndex = tokenName.indexOf('-');
+                        const cleanVmName = firstDashIndex !== -1 ? tokenName.substring(firstDashIndex + 1) : tokenName;
+
+                        vmItem.innerText = cleanVmName;
+                        
+                        // Клик по ВМ запускает трансляцию во фрейме
+                        vmItem.onclick = function(e) {
+                            e.stopPropagation(); // Исключаем ложное срабатывание клика по узлу
+                            selectVM(this, tokenName);
+                        };
+                        sublist.appendChild(vmItem);
+                    });
+
+                    // Если на ЭВМ есть активные ВМ — подсвечиваем сам узел хоста
+                    if (nodeHasActiveVms) {
+                        node.classList.add('node-active');
+                    }
+
+                    // Умное скрытие: проверяем, должен ли узел быть свёрнут
+                    let shouldCollapse = false;
+                    if (manualStates[nodeFullTitle] !== undefined) {
+                        // Сохраняем состояние, выбранное инструктором вручную во время сессии
+                        shouldCollapse = manualStates[nodeFullTitle];
+                    } else {
+                        // При первой загрузке автоматически сворачиваем только неактивные хосты
+                        shouldCollapse = !nodeHasActiveVms;
+                    }
+
+                    if (shouldCollapse) {
+                        node.classList.add('collapsed');
+                        sublist.classList.add('hidden');
+                    }
+
+                    treeContainer.appendChild(node);
+                    treeContainer.appendChild(sublist);
+                });
+            })
+            .catch(err => {
+                treeContainer.innerHTML = '<div style="padding:15px;color:red;">Ошибка загрузки дерева токенов</div>';
+                console.error(err);
+            });
+    }
+
+    // Первая инициализация при открытии панели
+    loadTreeData();
+
+    // Автоматический фоновый опрос состояний ВМ каждые 30 секунд
+    setInterval(loadTreeData, 30000);
+</script>
+</body>
+</html>
