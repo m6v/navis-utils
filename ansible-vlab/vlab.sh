@@ -26,6 +26,7 @@ PLAYBOOKS=(
     "define_user_pool.yml"
     "destroy_user_pool.yml"
     "delete_user.yml"
+    "get_users.yml"
 )
 
 # Функция отображения меню выбора хостов из инвентаря (тип меню в первом аргументе)
@@ -133,8 +134,11 @@ prompt_user_pass() {
     return 0
 }
 
-# Вызов начальных диалогов
-prompt_user_name "administrator"
+# Найти учетные записи, входящие в группу astra-admin, если нет, то в группу sudo
+user_name=$(getent group "astra-admin" || getent group "sudo" | cut -d: -f4)
+prompt_user_name
+# Вызвать диалог выбора пользователя с дефолтным именем  с наименьшим id из найденных
+prompt_user_name $(grep -E $user_name /etc/passwd | sort -t: -k3,3n | head -n1 | cut -d: -f1)
 prompt_user_pass
 
 ansible_user=$user_name
@@ -146,20 +150,21 @@ while true; do
     host=""
     user_name=""
 
-    choice=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Выбрать" --cancel-button "Выход" --menu "\nВыберите действие:" 15 65 6 \
+    choice=$(whiptail --title "$TITLE" --backtitle "$HINT" --ok-button "Выбрать" --cancel-button "Выход" --menu "\nВыберите действие:" 15 65 7 \
         "1" "Инициализировать среду виртуализации" \
         "2" "Создать учетную запись пользователя" \
         "3" "Создать пул и виртуальные машины пользователя" \
         "4" "Удалить пул и виртуальные машины пользователя" \
         "5" "Удалить учетную запись пользователя" \
-        "6" "Показать справку" 3>&1 1>&2 2>&3)
+        "6" "Показать список пользователей" \
+        "7" "Показать справку" 3>&1 1>&2 2>&3)
 
     if [ $? -ne 0 ] || [ -z "$choice" ]; then
         clear
         exit 0
     fi
 
-    if [ "$choice" -eq 6 ]; then
+    if [ "$choice" -eq 7 ]; then
         # Проверка наличия файла справки в текущем каталоге
         if [ -f "help.txt" ]; then
             whiptail --title "Справка" \
@@ -196,7 +201,7 @@ while true; do
 
     # Индивидуальное исключение для подтверждения удаления пользователя
     if [ "$choice" -eq 5 ]; then
-        whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user_name' на '$host'?" 10 60 || continue
+        whiptail --title "Подтверждение" --backtitle "$HINT" --ok-button "Да" --cancel-button "Нет" --yesno "Удалить пользователя '$user_name' на '$hosts'?" 10 60 || continue
     fi
     # Вызов функции-обертки для запуска плейбука $playbook над хостами $hosts
     run_ansible "$playbook" -u "$user_name" -l "$hosts"

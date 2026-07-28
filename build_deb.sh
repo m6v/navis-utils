@@ -5,8 +5,8 @@ set -e
 
 # Переменные пакета
 PACKAGE_NAME="ansible-vlab"
-VERSION="1.0.0"
-MAINTAINER="Sergey MAksimov <m6v@main.ru>"
+VERSION="1.1.2"
+MAINTAINER="Sergey Mаksimov <m6v@main.ru>"
 DESCRIPTION="Ansible orchestration for virtual laboratory (vlab)"
 SOURCE_DIR="./ansible-vlab"
 
