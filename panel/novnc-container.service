@@ -1,0 +1,27 @@
+[Unit]
+Description=noVNC systemd-nspawn Container with OverlayFS
+After=network.target
+
+[Service]
+Type=simple
+# Принудительно очищаем точку монтирования, если не была размонтирована
+ExecStartPre=-/usr/bin/umount -l /var/lib/novnc/merged
+# Создаем папки перед запуском, если они отсутствуют
+ExecStartPre=/usr/bin/mkdir -p /var/lib/novnc/upper /var/lib/novnc/work /var/lib/novnc/merged
+# Монтируем OverlayFS
+ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=/var/lib/novnc/upper,workdir=/var/lib/novnc/work /var/lib/novnc/merged
+
+# Запуск контейнера (флаг --keep-unit связывает процессы внутри), флан -M задает имя контейнера для последующего подключения с помощью `machinectl shell novnc`
+# Запуск /bin/sleep infinity "замораживает" контейнер в запущенном состоянии для последующего входа в него. В реальных кейсах обычно запускается какая-то служба
+ExecStart=/usr/bin/systemd-nspawn --keep-unit -M novnc -D /var/lib/novnc/merged /bin/sleep infinity
+
+# Безопасное размонтирование после остановки контейнера
+ExecStopPost=/usr/bin/umount -l /var/lib/novnc/merged
+# Очистка рабочей папки overlayfs (рекомендуется для стабильности)
+ExecStopPost=/usr/bin/rm -rf /var/lib/novnc/work/work
+
+KillMode=mixed
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
