@@ -251,8 +251,8 @@
                             nodeHasActiveVms = true;
                         }
                         
-                        // Лаконичное отсечение префикса АРМ до первого дефиса
-                        vmItem.innerText = tokenName.replace(/^[^-]+-/, '');
+                        // Удаляем из токена имя текущего узла и идущий за ним дефис
+                        vmItem.innerText = tokenName.startsWith(nodeName + '-') ? tokenName.slice(nodeName.length + 1) : tokenName;
                         
                         vmItem.onclick = function(e) {
                             e.stopPropagation(); // Исключаем ложное срабатывание клика по узлу
