@@ -9,8 +9,8 @@ import socket
 
 PORT = 8000
 WEBSOCKIFY_PORT = 8085
-CONFIG_JSON_FILE = '/etc/novnc/tokens.json'   # Путь к новому JSON файлу
-FLAT_TOKENS_FILE = '/tmp/novnc_flat_tokens'    # Временный файл для websockify
+CONFIG_JSON_FILE = '/etc/novnc/tokens.json'
+FLAT_TOKENS_FILE = '/tmp/novnc_flat_tokens'
 NOVNC_WEB_ROOT = '/usr/share/novnc'
 
 def check_port(ip, port):
@@ -24,7 +24,7 @@ def check_port(ip, port):
         return False
 
 def rebuild_flat_tokens():
-    """Парсит JSON файл, проверяет статус ВМ и генерирует плоский файл для websockify"""
+    """Парсит json-файл конфигурации, проверяет статус ВМ и генерирует плоский файл для websockify"""
     tokens_tree = {}
     flat_lines = []
 
@@ -33,35 +33,35 @@ def rebuild_flat_tokens():
         return tokens_tree
 
     try:
-        # Нативное чтение структуры из JSON
+        # Чтение файла конфигурации
         with open(CONFIG_JSON_FILE, 'r', encoding='utf-8') as f:
             config_data = json.load(f)
 
-        for pc_name, pc_info in config_data.items():
-            ip_address = pc_info.get("ip", "").strip()
-            tokens_dict = pc_info.get("tokens", {})
+        for vm_name, vm_info in config_data.items():
+            ip_address = vm_info.get("ip", "").strip()
+            tokens_dict = vm_info.get("tokens", {})
             
             if not ip_address:
                 continue
             
             # Сохраняем обратную совместимость структуры для ответа API (/api/tokens)
-            tokens_tree[pc_name] = {
+            tokens_tree[vm_name] = {
                 "ip": ip_address,
                 "vms": []
             }
 
             for key, port in tokens_dict.items():
-                token_name = f"{pc_name}-{key.strip()}"
+                token_name = f"{vm_name}-{key.strip()}"
                 
-                # Проверяем реальный статус ВМ прямо сейчас
+                # Проверка доступности ВМ
                 is_online = check_port(ip_address, port)
                 
-                tokens_tree[pc_name]["vms"].append({
+                tokens_tree[vm_name]["vms"].append({
                     "token": token_name,
                     "status": "online" if is_online else "offline"
                 })
                 
-                # Формируем строку в строгом формате websockify
+                # Формируем строку в формате websockify
                 flat_lines.append(f"{token_name}: {ip_address}:{port}\n")
 
         # Записываем плоский файл для websockify
@@ -69,13 +69,13 @@ def rebuild_flat_tokens():
             f.writelines(flat_lines)
 
     except json.JSONDecodeError as je:
-        print(f"Ошибка синтаксиса в JSON-файле: {je}", file=sys.stderr)
+        print(f"Ошибка синтаксиса в файле конфигурации: {je}", file=sys.stderr)
     except Exception as e:
-        print(f"Ошибка при обработке конфигурации: {e}", file=sys.stderr)
+        print(f"Ошибка при обработке файла конфигурации: {e}", file=sys.stderr)
 
     return tokens_tree
 
-class ProxmoxSimHandler(http.server.SimpleHTTPRequestHandler):
+class NoVNCHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/api/tokens':
             self.send_response(200)
@@ -116,10 +116,10 @@ if __name__ == '__main__':
     websock_proc = start_websockify()
     time.sleep(1)
     
-    print(f"Интерфейс Комплекса запущен на http://localhost:{PORT}")
+    print(f"Панель инструктора запущена на http://localhost:{PORT}")
     
     try:
-        server = http.server.HTTPServer(('0.0.0.0', PORT), ProxmoxSimHandler)
+        server = http.server.HTTPServer(('0.0.0.0', PORT), NoVNCHandler)
         server.serve_forever()
     except BaseException:
         print("\nОстановка серверов...")

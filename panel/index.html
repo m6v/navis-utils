@@ -4,204 +4,147 @@
     <meta charset="UTF-8">
     <title>УТК-СЗИ</title>
     <style>
-        /* Базовые переменные для СВЕТЛОЙ темы */
+        /* Автоматическая поддержка темной/светлой темы на системном уровне */
         :root {
-            --pve-orange: #f26522;
-            --pve-dark: #34495e;
-            --sidebar-bg: #f4f6f7;
-            --sidebar-hover: #e8ecef;
-            --node-offline: #b0bfc6;
-            --node-active: #5a6a75;
-            --vm-offline: #d1d8dc;
-            --vm-online: #718096;
-            --bg-main: #ffffff;
-            --bg-placeholder: #fafafa;
-            --border-color: #d2d6de;
-            --icon-brightness-node: 0.6;
-            --icon-brightness-vm: 0.55;
-            --font-size: 13px;
+            color-scheme: light dark;
+            
+            /* Системные переменные цветов */
+            --bg-main: Canvas;
+            --pve-dark: CanvasText;
+            --border-color: ButtonBorder;
+            --sidebar-bg: ButtonFace;
+            --sidebar-hover: Highlight;
+            --pve-orange: AccentColor;      
+            
+            /* Цвета состояний элементов дерева */
+            --node-offline: GrayText;
+            --node-active: color-mix(in srgb, CanvasText 85%, transparent); /* Темно-серый (или светло-серый в темной теме) */
+            --vm-offline: GrayText;
+            --vm-online: var(--node-active); /* Использует тот же темно-серый цвет */
+            --bg-placeholder: Field;
         }
 
-        /* Переменные для ТЁМНОЙ темы */
-        body.dark-theme {
-            --pve-dark: #ffffff;
-            --sidebar-bg: #1e282c;
-            --sidebar-hover: #2c3b41;
-            --node-offline: #607d8b;
-            --node-active: #b0bec5;
-            --vm-offline: #475569;
-            --vm-online: #94a3b8;
-            --bg-main: #222d32;
-            --bg-placeholder: #29353a;
-            --border-color: #37474f;
-            --icon-brightness-node: 1.2;
-            --icon-brightness-vm: 1.1;
-        }
-
-        body, html {
+        html, body {
             margin: 0;
             padding: 0;
-            height: 100%;
-            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            height: 100vh;
             overflow: hidden;
+            font-family: system-ui, sans-serif;
             background-color: var(--bg-main);
-            transition: background-color 0.2s;
+            color: var(--pve-dark);
+            display: flex;
+            flex-direction: column;
         }
 
-        /* Шапка комплекса (размер 14px) */
+        /* Шапка — название проекта */
         .top-bar {
-            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 1rem;
+            font-size: 1.25rem;
             border-bottom: 3px solid var(--pve-orange);
-            font-size: 14px;
-            font-weight: bold;
-            letter-spacing: 0.5px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--pve-dark);
             background-color: var(--bg-main);
-            position: relative;
-        }
-
-        /* Контейнер для кнопок управления */
-        .controls-wrapper {
-            position: absolute;
-            right: 15px;
-            display: flex;
-            gap: 5px;
-        }
-
-        /* Кнопки управления (Тема и Шрифт) */
-        .ctrl-btn {
-            background: none;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            color: var(--pve-dark);
-            cursor: pointer;
-            padding: 4px 8px;
-            font-size: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .ctrl-btn:hover {
-            background-color: var(--sidebar-hover);
-            border-color: #b8c7ce;
+            flex-shrink: 0;
         }
 
-        /* Главный контейнер */
         .main-container {
             display: flex;
-            height: calc(100% - 41px);
+            flex: 1;
+            min-height: 0;
         }
 
         /* Боковая панель */
         .sidebar {
-            width: 260px;
+            width: 20rem; 
+            overflow-y: auto;
+            overflow-x: hidden;
+            user-select: none;
             background-color: var(--sidebar-bg);
             border-right: 1px solid var(--border-color);
-            font-size: var(--font-size);
-            user-select: none;
-            padding-top: 5px;
-            overflow-y: auto;
-            transition: font-size 0.15s ease;
         }
 
-        /* Элементы дерева (Узлы и ВМ) */
+        /* Элементы списка */
         .node-item, .vm-item {
-            padding: 8px 15px;
-            cursor: pointer;
-            font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            font-weight: 600;
+            cursor: pointer;
             color: var(--node-offline);
         }
-
         .node-item:hover, .vm-item:hover {
             background-color: var(--sidebar-hover);
+            color: HighlightText;
         }
 
-        /* Иконка Узла */
-        .node-item::before {
-            content: "🗄️";
-            font-size: 1.15em;
-            filter: grayscale(1) brightness(0.8) opacity(0.3);
+        /* Запрет переноса названий */
+        #pve-tree *, .vm-item {
+            white-space: nowrap !important;
         }
 
-        /* Состояние Узла (АКТИВЕН) */
-        .node-item.node-active {
-            color: var(--node-active);
+        /* Иконки-эмодзи */
+        .node-item::before, .vm-item::before {
+            font-size: 1.15rem;
+            opacity: 0.4; 
         }
-        .node-item.node-active::before {
-            filter: grayscale(1) brightness(var(--icon-brightness-node)) opacity(0.9);
-        }
+        .node-item::before { content: "🗄️"; }
+        .vm-item::before { content: "🖥️"; }
 
-        /* Стрелка состояния узла */
+        /* Активные состояния хостов */
+        .node-item.node-active { color: var(--node-active); }
+        .node-item.node-active::before { opacity: 1; }
+
         .node-toggle {
-            display: inline-block;
-            width: 10px;
-            font-size: 0.8em;
-            color: var(--node-offline);
-            transition: transform 0.15s ease;
+            width: 1rem;
+            font-size: 0.8rem;
+            transition: transform 0.15s;
         }
         .node-item.collapsed .node-toggle {
             transform: rotate(-90deg);
         }
 
-        /* Список ВМ */
         .vm-sublist {
             list-style: none;
             padding: 0;
             margin: 0;
-            overflow: hidden;
-            transition: max-height 0.25s ease-out;
-            max-height: 400px;
-            background-color: var(--bg-main);
         }
         .vm-sublist.hidden {
-            max-height: 0 !important;
+            display: none;
         }
 
-        /* Элементы ВМ */
         .vm-item {
-            padding-left: 42px;
+            padding-left: 2.5rem;
             color: var(--vm-offline);
         }
-        .vm-item::before {
-            content: "🖥️";
-            font-size: 1em;
-            filter: grayscale(1) brightness(0.8) opacity(0.25);
-        }
+        .vm-item.online { color: var(--vm-online); }
+        .vm-item.online::before { opacity: 1; }
 
-        /* Состояние ВМ (ВКЛЮЧЕНА) */
-        .vm-item.online {
-            color: var(--vm-online);
-        }
-        .vm-item.online::before {
-            filter: grayscale(1) brightness(var(--icon-brightness-vm)) opacity(0.85);
-        }
-
-        /* Активная выбранная строка */
+        /* Выбранная инструктором строка (цвет выделения ОС) */
         .vm-item.active {
             background-color: var(--pve-orange);
-            color: #ffffff !important;
+            color: HighlightText !important;
         }
         .vm-item.active::before {
-            filter: brightness(0) invert(1) opacity(1) !important;
+            opacity: 1;
         }
 
-        /* Основная область и фрейм */
-        .content-area, iframe {
-            flex-grow: 1;
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
             height: 100%;
         }
+
         iframe {
+            flex: 1;
+            width: 100%;
+            height: 100%;
             border: none;
             display: none;
-            width: 100%;
         }
 
         /* Заглушка приветствия */
@@ -211,12 +154,18 @@
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: #7f8c8d;
+            flex: 1;
             background-color: var(--bg-placeholder);
+            color: var(--node-offline);
         }
         .placeholder-view h2 {
             margin: 0 0 10px 0;
-            font-weight: 300;
+            font-size: 1.5rem;
+            font-weight: 400;
+        }
+        .placeholder-view p {
+            margin: 0;
+            font-size: 1rem;
         }
     </style>
 </head>
@@ -224,12 +173,6 @@
 
 <div class="top-bar">
     Учебно-тренировочный комплекс СЗИ
-    
-    <div class="controls-wrapper">
-        <button class="ctrl-btn" onclick="changeFontSize(-1)" title="Уменьшить шрифт">A-</button>
-        <button class="ctrl-btn" onclick="changeFontSize(1)" title="Увеличить шрифт">A+</button>
-        <button class="ctrl-btn" onclick="toggleTheme()">🌓 Тема</button>
-    </div>
 </div>
 
 <div class="main-container">
@@ -239,9 +182,9 @@
     <div class="content-area">
         <div class="placeholder-view" id="pve-placeholder">
             <h2>Добро пожаловать в панель инструктора</h2>
-            <p>Выберите виртуальную машину в дереве слева для вывода экрана.</p>
+            <p>Выберите виртуальную машину в дереве слева для вывода экрана</p>
         </div>
-        <iframe id="vnc-frame" src=""></iframe>
+        <iframe id="vnc-frame" src="" style="white-space: normal;"></iframe>
     </div>
 </div>
 
@@ -250,29 +193,6 @@
     const treeContainer = document.getElementById('pve-tree');
     const iframe = document.getElementById('vnc-frame');
     const placeholder = document.getElementById('pve-placeholder');
-
-    // Восстановление сохранённого размера шрифта
-    let currentFontSize = parseInt(localStorage.getItem('pve-font-size')) || 13;
-    document.documentElement.style.setProperty('--font-size', `${currentFontSize}px`);
-
-    // Функция изменения размера шрифта в дереве ресурсов
-    function changeFontSize(direction) {
-        currentFontSize = Math.max(10, Math.min(20, currentFontSize + direction));
-        document.documentElement.style.setProperty('--font-size', `${currentFontSize}px`);
-        localStorage.setItem('pve-font-size', currentFontSize);
-    }
-
-    // Функция переключения тем (светлая / тёмная)
-    function toggleTheme() {
-        document.body.classList.toggle('dark-theme');
-        const isDark = document.body.classList.contains('dark-theme');
-        localStorage.setItem('pve-theme', isDark ? 'dark' : 'light');
-    }
-
-    // Восстановление сохранённой темы при загрузке страницы
-    if (localStorage.getItem('pve-theme') === 'dark') {
-        document.body.classList.add('dark-theme');
-    }
 
     // Обработчик выбора виртуальной машины инструктором
     function selectVM(element, token) {
@@ -298,12 +218,10 @@
                 const manualStates = {};
                 document.querySelectorAll('.node-item').forEach(el => {
                     const titleEl = el.querySelector('span:not(.node-toggle)');
-                    if (titleEl) {
-                        manualStates[titleEl.innerText] = el.classList.contains('collapsed');
-                    }
+                    if (titleEl) manualStates[titleEl.innerText] = el.classList.contains('collapsed');
                 });
 
-                // Очищаем дерево перед перерисовкой
+                // Очистка дерева перед перерисовкой
                 treeContainer.innerHTML = '';
                 
                 Object.keys(data).forEach(nodeName => {
@@ -328,19 +246,14 @@
                         const vmItem = document.createElement('li');
                         vmItem.className = 'vm-item';
                         
-                        // Если машина включена — добавляем класс подкраски
                         if (status === 'online') {
                             vmItem.classList.add('online');
                             nodeHasActiveVms = true;
                         }
                         
-                        // Извлекаем "чистое" имя ВМ, отсекая префикс узла до первого дефиса
-                        const firstDashIndex = tokenName.indexOf('-');
-                        const cleanVmName = firstDashIndex !== -1 ? tokenName.substring(firstDashIndex + 1) : tokenName;
-
-                        vmItem.innerText = cleanVmName;
+                        // Лаконичное отсечение префикса АРМ до первого дефиса
+                        vmItem.innerText = tokenName.replace(/^[^-]+-/, '');
                         
-                        // Клик по ВМ запускает трансляцию во фрейме
                         vmItem.onclick = function(e) {
                             e.stopPropagation(); // Исключаем ложное срабатывание клика по узлу
                             selectVM(this, tokenName);
@@ -348,20 +261,14 @@
                         sublist.appendChild(vmItem);
                     });
 
-                    // Если на ЭВМ есть активные ВМ — подсвечиваем сам узел хоста
                     if (nodeHasActiveVms) {
                         node.classList.add('node-active');
                     }
 
-                    // Умное скрытие: проверяем, должен ли узел быть свёрнут
-                    let shouldCollapse = false;
-                    if (manualStates[nodeFullTitle] !== undefined) {
-                        // Сохраняем состояние, выбранное инструктором вручную во время сессии
-                        shouldCollapse = manualStates[nodeFullTitle];
-                    } else {
-                        // При первой загрузке автоматически сворачиваем только неактивные хосты
-                        shouldCollapse = !nodeHasActiveVms;
-                    }
+                    // Умное скрытие хостов: по умолчанию сворачиваем только неактивные хосты
+                    let shouldCollapse = manualStates[nodeFullTitle] !== undefined 
+                        ? manualStates[nodeFullTitle] 
+                        : !nodeHasActiveVms;
 
                     if (shouldCollapse) {
                         node.classList.add('collapsed');
