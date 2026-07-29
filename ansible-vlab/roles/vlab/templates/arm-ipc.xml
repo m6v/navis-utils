@@ -37,10 +37,8 @@
 
     <disk type='file' device='cdrom'>
       <driver name='qemu' type='raw'/>
-      <!-- ИСПРАВЛЕНО: Изменено sda на sdb -->
       <target dev='sdb' bus='sata'/>
       <readonly/>
-      <!-- ИСПРАВЛЕНО: Добавлен уникальный адрес на контроллере (unit="1") -->
       <address type="drive" controller="0" bus="0" target="0" unit="1"/>
     </disk>
 
@@ -49,7 +47,13 @@
       <model type='virtio'/>
     </interface>
 
-    <graphics type='vnc' port='5914' autoport='no' listen='0.0.0.0'>
+    <graphics type="spice" autoport="yes">
+      <listen type="address"/>
+      <image compression="off"/>
+      <gl enable="no"/>
+    </graphics>
+
+    <graphics type='vnc' port='5904' autoport='no' listen='0.0.0.0'>
       <listen type='address' address='0.0.0.0'/>
     </graphics>
 

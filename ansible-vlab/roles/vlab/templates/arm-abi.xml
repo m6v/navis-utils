@@ -28,11 +28,11 @@
   <devices>
     <emulator>/usr/bin/qemu-system-x86_64</emulator>
 
-  <disk type='volume' device='disk'>
-    <driver name='qemu' type='qcow2' cache='writeback'/>
-    <source pool='{{ user_pool_name }}' volume='{{ item }}.qcow2'/>
-    <target dev='vda' bus='virtio'/>
-  </disk>
+    <disk type='volume' device='disk'>
+      <driver name='qemu' type='qcow2' cache='writeback'/>
+      <source pool='{{ user_pool_name }}' volume='{{ item }}.qcow2'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
 
     <disk type='file' device='cdrom'>
       <driver name='qemu' type='raw'/>
@@ -45,7 +45,13 @@
       <model type='virtio'/>
     </interface>
 
-    <graphics type='vnc' port='5903' autoport='no' listen='0.0.0.0'>
+    <graphics type="spice" autoport="yes">
+      <listen type="address"/>
+      <image compression="off"/>
+      <gl enable="no"/>
+    </graphics>
+
+    <graphics type='vnc' port='5913' autoport='no' listen='0.0.0.0'>
       <listen type='address' address='0.0.0.0.0'/>
     </graphics>
 
