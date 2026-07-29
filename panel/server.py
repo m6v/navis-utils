@@ -9,12 +9,12 @@ import socket
 
 PORT = 8000
 WEBSOCKIFY_PORT = 8085
-CONFIG_JSON_FILE = '/etc/novnc/tokens.json'
-FLAT_TOKENS_FILE = '/tmp/novnc_flat_tokens'
+JSON_TOKENS_FILE = '/etc/novnc/tokens.json'
+FLAT_TOKENS_FILE = '/tmp/tokens.txt'
 NOVNC_WEB_ROOT = '/usr/share/novnc'
 
 def check_port(ip, port):
-    """Быстро проверяет, открыт ли TCP-порт VNC на удаленной ЭВМ"""
+    """Проверка, открыт ли TCP-порт VNC на удаленной ЭВМ"""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.settimeout(0.1)
@@ -24,17 +24,17 @@ def check_port(ip, port):
         return False
 
 def rebuild_flat_tokens():
-    """Парсит json-файл конфигурации, проверяет статус ВМ и генерирует плоский файл для websockify"""
+    """Парсинг json-файла конфигурации, проверка статуса ВМ и генерация файла с токенами в формате websockify"""
     tokens_tree = {}
     flat_lines = []
 
-    if not os.path.exists(CONFIG_JSON_FILE):
-        print(f"Ошибка: Файл конфигурации {CONFIG_JSON_FILE} не найден!", file=sys.stderr)
+    if not os.path.exists(JSON_TOKENS_FILE):
+        print(f"Ошибка: Файл конфигурации {JSON_TOKENS_FILE} не найден!", file=sys.stderr)
         return tokens_tree
 
     try:
         # Чтение файла конфигурации
-        with open(CONFIG_JSON_FILE, 'r', encoding='utf-8') as f:
+        with open(JSON_TOKENS_FILE, 'r', encoding='utf-8') as f:
             config_data = json.load(f)
 
         for vm_name, vm_info in config_data.items():
@@ -43,7 +43,7 @@ def rebuild_flat_tokens():
             
             if not ip_address:
                 continue
-            
+
             # Сохраняем обратную совместимость структуры для ответа API (/api/tokens)
             tokens_tree[vm_name] = {
                 "ip": ip_address,
@@ -52,19 +52,19 @@ def rebuild_flat_tokens():
 
             for key, port in tokens_dict.items():
                 token_name = f"{vm_name}-{key.strip()}"
-                
+
                 # Проверка доступности ВМ
                 is_online = check_port(ip_address, port)
-                
+
                 tokens_tree[vm_name]["vms"].append({
                     "token": token_name,
                     "status": "online" if is_online else "offline"
                 })
-                
-                # Формируем строку в формате websockify
+
+                # Формирование строки в формате websockify
                 flat_lines.append(f"{token_name}: {ip_address}:{port}\n")
 
-        # Записываем плоский файл для websockify
+        # Запись файла конфигурации для websockify
         with open(FLAT_TOKENS_FILE, 'w', encoding='utf-8') as f:
             f.writelines(flat_lines)
 
@@ -95,7 +95,7 @@ def start_websockify():
         str(WEBSOCKIFY_PORT),
         '--target-config=' + FLAT_TOKENS_FILE
     ]
-    
+
     print(f"Запуск websockify на порту {WEBSOCKIFY_PORT}...")
     try:
         process = subprocess.Popen(
@@ -111,13 +111,13 @@ def start_websockify():
 if __name__ == '__main__':
     if os.getuid() != 0:
         print("Внимание: Скрипт запущен без прав root. Доступ к /etc/novnc/tokens.json может быть заблокирован.", file=sys.stderr)
-    
+
     rebuild_flat_tokens()
     websock_proc = start_websockify()
     time.sleep(1)
-    
+
     print(f"Панель инструктора запущена на http://localhost:{PORT}")
-    
+
     try:
         server = http.server.HTTPServer(('0.0.0.0', PORT), NoVNCHandler)
         server.serve_forever()
