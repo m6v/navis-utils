@@ -44,7 +44,7 @@ def rebuild_flat_tokens():
             if not ip_address:
                 continue
 
-            # Сохраняем обратную совместимость структуры для ответа API (/api/tokens)
+            # Сохранение обратной совместимости структуры для ответа API (/api/tokens)
             tokens_tree[vm_name] = {
                 "ip": ip_address,
                 "vms": []
