@@ -1,52 +1,63 @@
-# Реализация веб-панели инструктора УТК-СЗИ для доступа к интерфейсам виртуальных машин обучаемых с помощью novnc
+# Веб-панель инструктора УТК-СЗИ для доступа к интерфейсам виртуальных машин обучаемых с помощью novnc
 
-Настройки
-1. Установить novnc на АРМ инструктора (требуется подключить base- и extended-репозитории)
-2. Файл tokens скопировать в каталог /etc/novnc АРМ инструктора
-3. В настройках виртуальных машин установить тип дисплея VNC, адрес "Все интерфейсы" и порт для подключения (в соответствии с фойлом tokens)
+## Установка novnc на АРМ инструктора
+Предварительно подключить base и  extended репозитории и выполнить
+```
+sudo apt update && sudo apt install novnc
+```
 
-# Юнит запуска контейнера systemd-nspawn
+## Создание карты токенов (матрицы ВМ)
+```
+sudo mkdir -p /etc/novnc
+cat << EOF > /etc/novnc/tokens
+# Компьютер 1 (например, IP 192.168.1.11)
+pc1-vm1: 192.168.1.11:5901
+pc1-vm2: 192.168.1.11:5902
+pc1-vm3: 192.168.1.11:5903
+pc1-vm4: 192.168.1.11:5904
+pc1-vm5: 192.168.1.11:5905
 
-```bash
-cat << EOF > /etc/systemd/system/novnc-container.service
+
+# Компьютер 5 (например, IP 192.168.1.15)
+pc1-vm1: 192.168.1.15:5901
+pc1-vm2: 192.168.1.15:5902
+pc1-vm3: 192.168.1.15:5903
+pc1-vm4: 192.168.1.15:5904
+pc1-vm5: 192.168.1.15:5905
+EOF
+```
+
+## Создание службы автозапуска (systemd)
+```
+cat << EOF > /etc/systemd/system/novnc-instructor.service
 [Unit]
-Description=noVNC systemd-nspawn Container with OverlayFS
+Description=noVNC Central Token Server for Classroom
 After=network.target
 
 [Service]
 Type=simple
-# Принудительно очищаем точку монтирования, если не была размонтирована
-ExecStartPre=-/usr/bin/umount -l /var/lib/novnc/merged
-# Создаем папки перед запуском, если они отсутствуют
-ExecStartPre=/usr/bin/mkdir -p /var/lib/novnc/upper /var/lib/novnc/work /var/lib/novnc/merged
-# Монтируем OverlayFS
-ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=/var/lib/novnc/upper,workdir=/var/lib/novnc/work /var/lib/novnc/merged
+ExecStart=/usr/bin/websockify --web /usr/share/novnc 8080 --target-config=/etc/novnc/tokens
+Restart=always
+User=root
 
-# Запуск контейнера (флаг --keep-unit связывает процессы внутри), флан -M задает имя контейнера для последующего подключения с помощью `machinectl shell novnc`
-# Запуск /bin/sleep infinity "замораживает" контейнер в запущенном состоянии для последующего входа в него
-# В итоговой редакции будем запускать службу websockify
-ExecStart=/usr/bin/systemd-nspawn --keep-unit -M novnc -D /var/lib/novnc/merged /bin/sleep infinity
-
-# Размонтирование OverlayFS
-ExecStopPost=/usr/bin/umount -l /var/lib/novnc/merged
-# Очистка рабочего каталога OverlayFS
-ExecStopPost=/usr/bin/rm -rf /var/lib/novnc/work/work
-
-KillMode=mixed
-Restart=on-failure
-
+[Unit]
 [Install]
 WantedBy=multi-user.target
 EOF
-
 systemctl daemon-reload
-systemctl enable --now novnc-container
+systemctl enable --now novnc-instructor
 ```
 
-## Прямой вход через nsenter
-```
-nsenter -t $(machinectl show novnc -p Leader --value) -m -u -i -n -p /bin/bash
-```
-> Штатный способ входа с помощью `machinectl shell novnc` не работает, т.к. требует как минимум запуска dbus внутри контейнера, что явдяется излишним в данном случае
+## Настройка АРМ обучаемых
+> TODO Изменить XML-конфиги ВМ ВМ
 
-После входа в контейнер устанавливаем novnc и другие необходимые программы
+Откройте virt-manager, зайдите в свойства каждой ВМ (вкладка «Дисплей VNC»):
+ВМ №1: Адрес: 0.0.0.0, Порт: 5901
+...
+ВМ №5: Адрес: 0.0.0.0, Порт: 5905
+
+## Подключение в браузере
+Подключение в браузере по url `http://localhost:8085/vnc.html?path=websockify?token=pc1-vm1&autoconnect=true`
+- autoconnect=true — автоматически проскакивает экран приветствия и кнопку.
+- resize=scale — автоматически подгоняет разрешение экрана ВМ под размер окна браузера.
+- view_only=true — (опционально) блокирует отправку нажатий клавиш и мыши с ПК инструктора, оставляя только режим демонстрации экрана ученика (если инструктору нужно управлять машиной, этот параметр добавлять не нужно)
