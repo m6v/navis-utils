@@ -1,6 +1,2 @@
 [Network]
 Bridge=virbr0
-Interface=vb-ntp-srv
-
-[Files]
-Bind=/var/lib/machines/ntp-container/chronyd.sock:/run/chrony/chronyd.sock
