@@ -1,0 +1,27 @@
+[Unit]
+Description=TimeMachine NTP Service Container
+After=network.target
+
+[Service]
+Type=simple
+
+# Перед стартом: зачищаем старые точки монтирования nspawn и собираем слои overlayfs
+ExecStartPre=/usr/bin/rm -rf /run/systemd/nspawn/unix-export/ntp-container /run/systemd/nspawn/propagate/ntp-container
+ExecStartPre=/usr/bin/mkdir -p /var/lib/machines/ntp-container/upper /var/lib/machines/ntp-container/work /var/lib/machines/ntp-container/merged
+ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=/var/lib/machines/ntp-container/upper,workdir=/var/lib/machines/ntp-container/work /var/lib/machines/ntp-container/merged
+
+# Запуск управляющего скрипта
+ExecStart=/usr/local/bin/timemachine.sh start
+
+# Остановка управляющего скрипта (сохранение времени)
+ExecStop=/usr/local/bin/timemachine.sh stop
+
+# После остановки: чистое размонтирование файловой системы
+ExecStopPost=/usr/bin/umount /var/lib/machines/ntp-container/merged
+
+KillMode=mixed
+TimeoutStopSec=15
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

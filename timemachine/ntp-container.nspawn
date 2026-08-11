@@ -1,0 +1,3 @@
+[Network]
+Bridge=virbr0
+Interface=vb-ntp-srv
