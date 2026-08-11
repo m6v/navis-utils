@@ -14,7 +14,6 @@ case "$1" in
         TARGET_TIME=$(cat "$CONF" | tr -d '[:space:]')
         echo "Запуск TimeMachine контейнера. Целевое виртуальное время: $TARGET_TIME"
         
-        # Запускаем контейнер без CAP_SYS_TIME — часы хоста теперь неприкосновенны
         exec systemd-nspawn -D "$MERGED_DIR" -M "$CONTAINER_NAME" \
             --keep-unit --register=no \
             /entrypoint.sh "$TARGET_TIME"
@@ -26,12 +25,12 @@ case "$1" in
         if [ -f "$CONF" ]; then
             START_TIME=$(cat "$CONF" | tr -d '[:space:]')
             
-            # Находим PID главного процесса nspawn через systemd
-            CONTAINER_PID=$(systemctl show --property=MainPID timemachine.service | cut -d= -f2)
+            # Ищем PID главного процесса-удержания sleep infinity на хосте
+            SLEEP_PID=$(pgrep -f "sleep infinity")
             
-            if [ -n "$CONTAINER_PID" ] && [ "$CONTAINER_PID" -gt 0 ]; then
-                # Железобетонный расчет аптайма процесса напрямую через тики ядра хоста
-                UPTIME_SEC=$(awk '{print int($22 / cv)}' cv=$(getconf CLK_TCK) /proc/$CONTAINER_PID/stat 2>/dev/null)
+            if [ -n "$SLEEP_PID" ]; then
+                # Считаем точный аптайм контейнера напрямую через тики ядра хоста
+                UPTIME_SEC=$(awk '{print int($22 / cv)}' cv=$(getconf CLK_TCK) /proc/$SLEEP_PID/stat 2>/dev/null)
                 
                 if [ -n "$UPTIME_SEC" ] && [ "$UPTIME_SEC" -gt 0 ]; then
                     VIRTUAL_TIME=$((START_TIME + UPTIME_SEC))

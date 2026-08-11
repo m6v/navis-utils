@@ -1,6 +1,7 @@
 [Unit]
 Description=TimeMachine NTP Service Container
-After=network.target
+Requires=timemachine.socket
+After=network.target timemachine.socket
 
 [Service]
 Type=simple
@@ -13,7 +14,7 @@ ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=/var/lib/m
 # Запуск управляющего скрипта
 ExecStart=/usr/local/bin/timemachine.sh start
 
-# Остановка управляющего скрипта (сохранение времени)
+# Остановка управляющего скрипта
 ExecStop=/usr/local/bin/timemachine.sh stop
 
 # После остановки: чистое размонтирование файловой системы

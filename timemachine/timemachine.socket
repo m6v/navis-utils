@@ -1,0 +1,9 @@
+[Unit]
+Description=TimeMachine Chrony Control Socket
+
+[Socket]
+ListenStream=/var/lib/machines/ntp-container/chronyd.sock
+SocketMode=0666
+
+[Install]
+WantedBy=sockets.target
