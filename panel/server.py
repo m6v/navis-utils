@@ -33,18 +33,16 @@ def rebuild_flat_tokens():
         return tokens_tree
 
     try:
-        # Чтение файла конфигурации
         with open(JSON_TOKENS_FILE, 'r', encoding='utf-8') as f:
             config_data = json.load(f)
 
         for vm_name, vm_info in config_data.items():
             ip_address = vm_info.get("ip", "").strip()
             tokens_dict = vm_info.get("tokens", {})
-            
+
             if not ip_address:
                 continue
 
-            # Сохранение обратной совместимости структуры для ответа API (/api/tokens)
             tokens_tree[vm_name] = {
                 "ip": ip_address,
                 "vms": []
@@ -52,8 +50,6 @@ def rebuild_flat_tokens():
 
             for key, port in tokens_dict.items():
                 token_name = f"{vm_name}-{key.strip()}"
-
-                # Проверка доступности ВМ
                 is_online = check_port(ip_address, port)
 
                 tokens_tree[vm_name]["vms"].append({
@@ -61,10 +57,8 @@ def rebuild_flat_tokens():
                     "status": "online" if is_online else "offline"
                 })
 
-                # Формирование строки в формате websockify
                 flat_lines.append(f"{token_name}: {ip_address}:{port}\n")
 
-        # Запись файла конфигурации для websockify
         with open(FLAT_TOKENS_FILE, 'w', encoding='utf-8') as f:
             f.writelines(flat_lines)
 
@@ -76,16 +70,24 @@ def rebuild_flat_tokens():
     return tokens_tree
 
 class NoVNCHandler(http.server.SimpleHTTPRequestHandler):
+    def translate_path(self, path):
+        """Преобразует относительный URL-путь запроса в абсолютный путь к файлу в папке скрипта"""
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), path.lstrip('/'))
+
     def do_GET(self):
+        if self.path == '/' or self.path == '':
+            self.path = '/index.html'
+
         if self.path == '/api/tokens':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            
+
             tokens_data = rebuild_flat_tokens()
             self.wfile.write(json.dumps(tokens_data).encode('utf-8'))
-        else:
-            super().do_GET()
+            return
+
+        super().do_GET()
 
 def start_websockify():
     """Запуск websockify в фоновом режиме на базе сгенерированного файла"""
@@ -119,6 +121,7 @@ if __name__ == '__main__':
     print(f"Панель инструктора запущена на http://localhost:{PORT}")
 
     try:
+        # Используем стандартный, простой и безопасный однопоточный сервер
         server = http.server.HTTPServer(('0.0.0.0', PORT), NoVNCHandler)
         server.serve_forever()
     except BaseException:

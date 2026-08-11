@@ -1,27 +1,22 @@
 [Unit]
-Description=vlab-panel systemd-nspawn container with OverlayFS and noVNC
-After=network.target
+Description=Instructor's Web Panel
+After=network.target libvirtd.service
+Requires=libvirtd.service
 
 [Service]
 Type=simple
-# Принудительная очистка точки монтирования, если не была размонтирована
-ExecStartPre=-/usr/bin/umount -l /var/lib/novnc/merged
-# Создание каталогов оверлея, если отсутствуют
-ExecStartPre=/usr/bin/mkdir -p /var/lib/novnc/upper /var/lib/novnc/work /var/lib/novnc/merged
-# Монтирование OverlayFS
-ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=/var/lib/novnc/upper,workdir=/var/lib/novnc/work /var/lib/novnc/merged
 
-# Запуск контейнера (флаг --keep-unit связывает процессы внутри), флаг -M задает имя контейнера для последующего подключения с помощью `machinectl shell novnc` (работает, только при запуске системы инициализации в контейнере)
-# Запуск /bin/sleep infinity "замораживает" контейнер в запущенном состоянии для последующего входа в него. В реальных кейсах обычно запускается какая-то служба
-ExecStart=/usr/bin/systemd-nspawn --keep-unit -M novnc -D /var/lib/novnc/merged /bin/sleep infinity
+WorkingDirectory=/usr/share/novnc
+ExecStart=/srv/vlab-panel/server.py
 
-# Безопасное размонтирование после остановки контейнера
-ExecStopPost=/usr/bin/umount -l /var/lib/novnc/merged
-# Очистка рабочей папки overlayfs (рекомендуется для стабильности)
-ExecStopPost=/usr/bin/rm -rf /var/lib/novnc/work/work
+User=root
+Group=root
 
-KillMode=mixed
 Restart=on-failure
+RestartSec=5s
+
+KillMode=control-group
+TimeoutStopSec=10s
 
 [Install]
 WantedBy=multi-user.target
