@@ -1,17 +1,17 @@
 [Unit]
-Description=TimeMachine NTP Service Container
+Description=NTP Service Container with TimeMachine
 After=network.target
 
 [Service]
 Type=simple
 
-# Перед стартом собираем слои оверлея
-ExecStartPre=/usr/bin/mkdir -p /var/lib/machines/ntp-container/upper /var/lib/machines/ntp-container/work /var/lib/machines/ntp-container/merged
-ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=/var/lib/machines/ntp-container/upper,workdir=/var/lib/machines/ntp-container/work /var/lib/machines/ntp-container/merged
+# Сборка оверлея
+ExecStartPre=/usr/bin/mkdir -p /var/lib/machines/timemachine/upper /var/lib/machines/timemachine/work /var/lib/machines/timemachine/merged
+ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=/var/lib/machines/timemachine/upper,workdir=/var/lib/machines/timemachine/work /var/lib/machines/timemachine/merged
 
 ExecStart=/usr/local/bin/timemachine.sh start
 ExecStop=/usr/local/bin/timemachine.sh stop
-ExecStopPost=/usr/bin/umount /var/lib/machines/ntp-container/merged
+ExecStopPost=/usr/bin/umount /var/lib/machines/timemachine/merged
 
 KillMode=mixed
 TimeoutStopSec=15

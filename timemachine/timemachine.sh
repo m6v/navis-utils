@@ -1,8 +1,8 @@
 #!/bin/bash
 
-CONF="/etc/timemachine.conf"
-CONTAINER_NAME="ntp-container"
-MERGED_DIR="/var/lib/machines/ntp-container/merged"
+CONF="/etc/faketime"
+CONTAINER_NAME="timemachine"
+MERGED_DIR="/var/lib/machines/timemachine/merged"
 
 case "$1" in
     start)
