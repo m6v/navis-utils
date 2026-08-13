@@ -10,7 +10,7 @@ MERGED_DIR = "/var/lib/machines/timemachine/merged"
 VIRTUAL_BASE = 1765832400  # 15.01.2026 00:00:00
 
 def get_root_device():
-    """Поиск блочного устройства, примонтированное в корень ФС"""
+    """Поиск блочного устройства, примонтированного в корень ФС"""
     try:
         with open("/proc/mounts", "r") as f:
             for line in f:
@@ -20,6 +20,9 @@ def get_root_device():
     except Exception as e:
         print(f"Ошибка определения корневого диска: {e}", file=sys.stderr)
     return None
+
+print(get_root_device())
+sys.exit()
 
 # Чтение конфигурации
 real_now = int(time.time())
