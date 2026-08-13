@@ -8,7 +8,7 @@ Type=simple
 Environment="STORAGE_ROOT=/var/lib/machines/timemachine"
 
 # Размонтирование и очистка на случай старта после нештатной остановки
-ExecStartPre=-/usr/bin/umount -l ${STORAGE_ROOT}/%i/merged
+ExecStartPre=-/usr/bin/umount -l ${STORAGE_ROOT}/merged
 
 # Сборка оверлея
 ExecStartPre=/usr/bin/mkdir -p ${STORAGE_ROOT}/upper ${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged
@@ -17,7 +17,7 @@ ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=${STORAGE_
 # Запуск менеджера управления временными сдвигами
 ExecStart=/usr/local/bin/timemachine.sh start
 ExecStop=/usr/local/bin/timemachine.sh stop
-ExecStopPost=/usr/bin/umount ${STORAGE_ROOT}/merged
+ExecStopPost=/usr/bin/umount -l ${STORAGE_ROOT}/merged
 
 KillMode=mixed
 TimeoutStopSec=10
