@@ -83,3 +83,35 @@ sudo make status
 авг 12 11:15:20 hp-260 timemachine.sh[12719]: Clock was 18088520.00 seconds fast.  Frequency change = 0.00ppm, new frequency = 0.00ppm
 Hint: Some lines were ellipsized, use -l to show in full.
 ```
+
+## Настройка клиентов
+```
+sudo -i
+apt unstall chrony
+
+CONF_PATH="/etc/chrony/chrony.conf"
+
+# Делаем резервную копию chrony.conf
+cp "$CONF_PATH" "${CONF_PATH}.bak"
+
+# Отключаем дефолтные серверы и пулы
+sed -i 's/^\s*\(server.*\)/# \1/' "$CONF_PATH"
+sed -i 's/^\s*\(pool.*\)/# \1/' "$CONF_PATH"
+
+# Разрешаем безлимитный прыжок времени назад (makestep 1 -1)
+if grep -q "makestep" "$CONF_PATH"; then
+    sed -i 's/^\s*makestep.*/makestep 1 -1/' "$CONF_PATH"
+else
+    echo "makestep 1 -1" >> "$CONF_PATH"
+fi
+
+# Добавляем timemachine-сервер времени
+echo "server 10.0.0.254 iburst" >> "$CONF_PATH"
+
+systemctl restart chrony
+```
+
+Принудительное обновление времени
+```
+chronyc -a makestep
+```
