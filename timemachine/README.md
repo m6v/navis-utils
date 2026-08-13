@@ -42,7 +42,7 @@ make install
 mount -t overlay overlay -o lowerdir=/,upperdir=/var/lib/machines/timemachine/upper,workdir=/var/lib/machines/timemachine/work /var/lib/machines/timemachine/merged
 systemd-nspawn -M timemachine --keep-unit --register=no -D /var/lib/machines/timemachine/merged /usr/bin/sleep infinity
 # В другой консоли выполнить вход в контейнер
-nsenter --target $(machinectl show timemachine -p Leader --value) --mount --uts --ipc --pid /bin/sh
+nsenter --target $(machinectl show timemachine -p Leader --value) --mount --net --uts --ipc --pid /bin/sh
 # Внутри контейнера
 apt install chrony
 # На запрос действия с измененным файлом настройки chrony.conf выбрать "сохранить измененную локальную версию"

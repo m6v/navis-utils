@@ -16,9 +16,8 @@ case "$1" in
         echo "Запуск TimeMachine контейнера. Виртуальное время: $TARGET_TIME"
         
         # Запускаем контейнер и передаем ему timestamp аргументом
-        exec systemd-nspawn -D "$MERGED_DIR" -M "$CONTAINER_NAME" \
-            --keep-unit --register=no \
-            /entrypoint.sh "$TARGET_TIME"
+        exec systemd-nspawn --keep-unit  -M "$CONTAINER_NAME" \
+             -D "$MERGED_DIR" /entrypoint.sh "$TARGET_TIME"
         ;;
 
     stop)
