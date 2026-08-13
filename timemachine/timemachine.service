@@ -5,16 +5,22 @@ After=network.target
 [Service]
 Type=simple
 
-# Сборка оверлея
-ExecStartPre=/usr/bin/mkdir -p /var/lib/machines/timemachine/upper /var/lib/machines/timemachine/work /var/lib/machines/timemachine/merged
-ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=/var/lib/machines/timemachine/upper,workdir=/var/lib/machines/timemachine/work /var/lib/machines/timemachine/merged
+Environment="STORAGE_ROOT=/var/lib/machines/timemachine"
 
+# Размонтирование и очистка на случай старта после нештатной остановки
+ExecStartPre=-/usr/bin/umount -l ${STORAGE_ROOT}/%i/merged
+
+# Сборка оверлея
+ExecStartPre=/usr/bin/mkdir -p ${STORAGE_ROOT}/upper ${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged
+ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=${STORAGE_ROOT}/upper,workdir=${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged
+
+# Запуск менеджера управления временными сдвигами
 ExecStart=/usr/local/bin/timemachine.sh start
 ExecStop=/usr/local/bin/timemachine.sh stop
-ExecStopPost=/usr/bin/umount /var/lib/machines/timemachine/merged
+ExecStopPost=/usr/bin/umount ${STORAGE_ROOT}/merged
 
 KillMode=mixed
-TimeoutStopSec=15
+TimeoutStopSec=10
 Restart=no
 
 [Install]
