@@ -4,19 +4,19 @@ After=network.target
 
 [Service]
 Type=simple
-
 Environment="STORAGE_ROOT=/var/lib/machines/timemachine"
 
-# Размонтирование и очистка на случай старта после нештатной остановки
+# Исправление для restart: гарантированно очищаем имя в machined перед новым запуском!
+ExecStartPre=-/usr/bin/machinectl terminate timemachine
 ExecStartPre=-/usr/bin/umount -l ${STORAGE_ROOT}/merged
 
 # Сборка оверлея
 ExecStartPre=/usr/bin/mkdir -p ${STORAGE_ROOT}/upper ${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged
 ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=${STORAGE_ROOT}/upper,workdir=${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged
 
-# Запуск менеджера управления временными сдвигами
-ExecStart=/usr/local/bin/timemachine.sh start
-ExecStop=/usr/local/bin/timemachine.sh stop
+# Запуск
+ExecStart=/usr/local/bin/timemachine.py
+
 ExecStopPost=/usr/bin/umount -l ${STORAGE_ROOT}/merged
 
 KillMode=mixed

@@ -19,6 +19,8 @@ install:
 	@cp -f timemachine.service $(SYSTEMD_DIR)/timemachine.service
 	@cp -f timemachine.sh $(BIN_DIR)/timemachine.sh
 	@chmod +x $(BIN_DIR)/timemachine.sh
+	@cp -f timemachine.py $(BIN_DIR)/timemachine.py
+	@chmod +x $(BIN_DIR)/timemachine.py
 	@cp -f entrypoint.sh $(PROJECT_DIR)/upper/entrypoint.sh
 	@chmod +x $(PROJECT_DIR)/upper/entrypoint.sh
 	@cp -f chrony.conf $(PROJECT_DIR)/upper/etc/chrony/chrony.conf
