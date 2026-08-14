@@ -3,6 +3,10 @@ SYSTEMD_DIR = /etc/systemd/system
 NSPAWN_DIR = /etc/systemd/nspawn
 BIN_DIR = /usr/local/bin
 PROJECT_DIR = /var/lib/machines/timemachine
+TIMESHIFT_FILE = /etc/timeshift
+INITIAL_DATE = 2026-01-15 00:00:00
+
+
 
 .PHONY: all install clean restart status
 
@@ -17,13 +21,12 @@ install:
 	@cp -f faketime $(CONF_DIR)/faketime
 	@cp -f timemachine.nspawn $(NSPAWN_DIR)/timemachine.nspawn
 	@cp -f timemachine.service $(SYSTEMD_DIR)/timemachine.service
-	@cp -f timemachine.sh $(BIN_DIR)/timemachine.sh
-	@chmod +x $(BIN_DIR)/timemachine.sh
 	@cp -f timemachine.py $(BIN_DIR)/timemachine.py
 	@chmod +x $(BIN_DIR)/timemachine.py
 	@cp -f entrypoint.sh $(PROJECT_DIR)/upper/entrypoint.sh
 	@chmod +x $(PROJECT_DIR)/upper/entrypoint.sh
 	@cp -f chrony.conf $(PROJECT_DIR)/upper/etc/chrony/chrony.conf
+	@echo $$(( $$(date -d "$(INITIAL_DATE)" +%s) - $$(date +%s))) > $(TIMESHIFT_FILE)
 	@systemctl daemon-reload
 
 restart:
@@ -44,8 +47,8 @@ clean:
 	@rm -f $(CONF_DIR)/faketime
 	@rm -f $(NSPAWN_DIR)/timemachine.nspawn
 	@rm -f $(SYSTEMD_DIR)/timemachine.service
-	@rm -f $(SYSTEMD_DIR)/timemachine.socket || true
-	@rm -f $(BIN_DIR)/timemachine.sh
+	@rm -f $(BIN_DIR)/timemachine.py
+	@rm -f $(TIMESHIFT_FILE)
 	@rm -rf $(PROJECT_DIR)
 	@systemctl daemon-reload
 	@echo "Очистка завершена."

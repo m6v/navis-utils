@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TARGET_TIME="$1"
+TARGET_TIMESTAMP="$1"
 
 # Настройка сети
 echo "TimeMachine: Настройка сетевого интерфейса host0 контейнера..."
@@ -13,16 +13,15 @@ sleep 0.5
 echo "TimeMachine: Запуск веб-сервера репозитория на порту 80..."
 python3 -m http.server --directory /srv/repo 80 &
 
-TARGET_DATE=$(date -d "@$TARGET_TIME" +"%Y-%m-%d %H:%M:%S")
-
 # Запуск Chrony на переднем плане (-d) в фоне самого bash (&)
 echo "TimeMachine: Запуск изолированного NTP-сервера..."
 /usr/sbin/chronyd -d -x &
 
-# Перевод времени на $TARGET_DATE
-echo "TimeMachine: Установка виртуального времени на $TARGET_DATE..."
+# Перевод времени на $TARGET_TIMESTAMP
+TARGET_DATETIME=$(date -d "@$TARGET_TIMESTAMP" +"%Y-%m-%d %H:%M:%S")
+echo "TimeMachine: Установка виртуального времени на $TARGET_DATETIME..."
 sleep 1
-chronyc -a "settime $TARGET_DATE" 2>/dev/null
+chronyc -a "settime $TARGET_DATETIME" 2>/dev/null
 
 # Удержание контейнера в запущенном состоянии
 exec /bin/sleep infinity

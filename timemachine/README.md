@@ -115,3 +115,11 @@ systemctl restart chrony
 ```
 chronyc -a makestep
 ```
+
+Определение времени выключения
+```
+tune2fs -l /dev/*** | grep "Last write time"
+last -x shutdown | head -n 3
+sudo grep "rtc" /var/log/syslog | tail -n 5
+sudo grep -E "Group Services|shutdown|poweroff|halt" /var/log/syslog | tail -n 5
+```
