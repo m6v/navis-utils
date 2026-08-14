@@ -4,17 +4,19 @@
 ```
 /
 ├── etc/
-│   ├── faketime                            # Точка сохранения времени (Unix Timestamp)
+│   ├── timeshift                           # Точка сохранения смещения времени
 │   └── systemd/
 │       ├── nspawn/
 │       │   └── timemachine.nspawn          # Сетевой конфиг nspawn (мост virbr0)
 │       └── system/
 │           └── timemachine.service         # Юнит-файл службы для systemd
+├── run/
+│   └── timemachine.stamp                   # Флаг смещения времени в текущем сеансе ОС 
 │
 ├── usr/
 │   └── local/
 │       └── bin/
-│           └── timemachine.sh              # Управляющий скрипт (start/stop)
+│           └── timemachine.py              # Управляющий скрипт
 │
 └── var/
     └── lib/

@@ -78,7 +78,7 @@ def get_down_timestamp():
 
     return None
 
-def get_timeshift_timestamp(timeshift_file=TIMESHIFT_FILE):
+def get_timeshift(timeshift_file=TIMESHIFT_FILE):
     """Рассчитать и вернуть временной сдвиг относительно текущего времени, при критичных ошибках ноль"""
     try:
         with open(timeshift_file, "r") as f:
@@ -140,7 +140,7 @@ def get_timeshift_timestamp(timeshift_file=TIMESHIFT_FILE):
 
 def main():
     # Расчет виртуального времени
-    target_timestamp = int(time.time()) + get_timeshift_timestamp()
+    target_timestamp = int(time.time()) + get_timeshift()
     logging.info(f"Виртуальное время {datetime.fromtimestamp(target_timestamp)}")
 
     # Запуск только из юнита systemd
