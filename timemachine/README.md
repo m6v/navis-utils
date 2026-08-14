@@ -31,11 +31,33 @@
                             └── chrony.conf # Конфиг chrony
 ```
 ## Назначение файлов
-- `/etc/faketime` — содержит Unix Timestamp (виртуальное время в секундах, которое считывается при старте и обновляется при остановке контейнера);
+- `/etc/timeshift` — содержит смещение в секундах которое нужно прибавлять к текущему времени и отдавать клиентам.  (вычисляется при старте контейнера путем добавления времени простоя в выключенном состоянии);
 - `/etc/systemd/nspawn/timemachine.nspawn` — связывает контейнер с мостом `virbr0` и фиксирует имя интерфейса;
-- `/usr/local/bin/timemachine.sh` — скрипт хоста (при аргументе `start` рассчитывает параметры и запускает `systemd-nspawn`, при `stop` — вычисляет, сколько секунд прожил процесс контейнера, прибавляет их к конфигу и останавливает контейнер);
+- `/usr/local/bin/timemachine.sh` — скрипт хоста который добавляет к смещению времени время простоя хоста;
 - `/var/lib/machines/timemachine/upper/entrypoint.sh` — скрипт контейнера (назначает IP 10.0.0.254 интерфейсу `host0`, запускает `chronyd -d -x` и через `chronyc settime` устанавливает время в соответствии с faketime);
 - `/var/lib/machines/timemachine/upper/etc/chrony/chrony.conf` — конфиг chrony внутри контейнера (включает режим `manual`, `local stratum 10`, открывает доступ для сети 10.0.0.0/24 и делает привязку к bindaddress 10.0.0.254).
+
+## Проверка настроек сети
+
+> Если сетевое взаимодействие контейнера с хостом и клиентами отсутствует, нужно проверить к какому мосту подключен интерфейс контейнера `vb-timemachine`
+Пример, когда вместо моста `virbr0` интерфейс подключился к мосту `br0`
+```
+7: vb-timemachine@if2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br0 state UP group default qlen 1000
+    link/ether 6a:ef:48:dc:74:8b brd ff:ff:ff:ff:ff:ff link-netnsid 0
+```
+Это происходит из-за настроек `systemd-neyworkd`. В данном случае в `/etc/systemd/network` есть файл с конфигом настройки, в соответствии с которым все интерфейсы, с именем, удовлетворяющем шаблону `v[eb]-*`, подключаются к мосту `br0`
+```
+[Match]
+Name=v[eb]-*
+[Network]
+Bridge=br0
+```
+Чтобы исправить ситуацию, нужно добавить в секцию `[Match]` параметр `Name=!vb-timemachine`, перезагрузить службы `systemd-neyworkd` и `timemachine`
+Теперь видим, что интерфейс контейнера `vb-timemachine` подключен к мосту `virbr0`
+```
+9: vb-timemachine@if2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master virbr0 state UP group default qlen 1000
+    link/ether 6a:ef:48:dc:74:8b brd ff:ff:ff:ff:ff:ff link-netnsid 0
+```
 
 ## Установка
 ```bash
@@ -44,7 +66,7 @@ make install
 mount -t overlay overlay -o lowerdir=/,upperdir=/var/lib/machines/timemachine/upper,workdir=/var/lib/machines/timemachine/work /var/lib/machines/timemachine/merged
 systemd-nspawn -M timemachine --keep-unit --register=no -D /var/lib/machines/timemachine/merged /usr/bin/sleep infinity
 # В другой консоли выполнить вход в контейнер
-nsenter --target $(machinectl show timemachine -p Leader --value) --mount --net --uts --ipc --pid /bin/sh
+nsenter --target $(machinectl show timemachine -p Leader --value) --mount --net --uts --ipc --pid /bin/bash
 # Внутри контейнера
 apt install chrony
 # На запрос действия с измененным файлом настройки chrony.conf выбрать "сохранить измененную локальную версию"
@@ -107,8 +129,8 @@ else
     echo "makestep 1 -1" >> "$CONF_PATH"
 fi
 
-# Добавляем timemachine-сервер времени
-echo "server 10.0.0.254 iburst" >> "$CONF_PATH"
+# Добавляем сервер времени контейнера timamachine
+echo "server 10.0.0.254 prefer iburst" >> "$CONF_PATH"
 
 systemctl restart chrony
 ```
