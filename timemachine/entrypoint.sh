@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TARGET_TIMESTAMP="$1"
+TIMESHIFT_FILE="/etc/timeshift"
 
 # Настройка сети
 echo "TimeMachine: Настройка сетевого интерфейса host0 контейнера..."
@@ -17,11 +17,22 @@ python3 -m http.server --directory /srv/repo 80 &
 echo "TimeMachine: Запуск изолированного NTP-сервера..."
 /usr/sbin/chronyd -d -x &
 
-# Перевод времени на $TARGET_TIMESTAMP
-TARGET_DATETIME=$(date -d "@$TARGET_TIMESTAMP" +"%Y-%m-%d %H:%M:%S")
-echo "TimeMachine: Установка виртуального времени на $TARGET_DATETIME..."
-sleep 1
-chronyc -a "settime $TARGET_DATETIME" 2>/dev/null
+# Проверка наличия и чтение файла со смещением времени
+if [ -f "$TIMESHIFT_FILE" ]; then
+    SHIFT=$(cat "$TIMESHIFT_FILE")
+    # Если файл пустой, то 0
+    SHIFT=${SHIFT:-0}
+else
+    SHIFT=0
+fi
+
+# Вычисление смещенного времени
+SHIFTED_TIME=$(date -d "@$(($(date +%s) + SHIFT))" +"%Y-%m-%dT%H:%M:%S")
+
+echo "TimeMachine: Установка смещенного времени $SHIFTED_TIME..."
+chronyc -a "settime $SHIFTED_TIME" 2>/dev/null
+# Указать, что время изменено вручную, и пересчитывать коэффициент корректировки дрейфа не нужно
+chronyc -a "manual delete 0"
 
 # Удержание контейнера в запущенном состоянии
 exec /bin/sleep infinity

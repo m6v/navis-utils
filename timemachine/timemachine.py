@@ -78,7 +78,7 @@ def get_down_timestamp():
 
     return None
 
-def get_timeshift(timeshift_file=TIMESHIFT_FILE):
+def main(timeshift_file=TIMESHIFT_FILE):
     """Рассчитать и вернуть временной сдвиг относительно текущего времени, при критичных ошибках ноль"""
     try:
         with open(timeshift_file, "r") as f:
@@ -137,23 +137,6 @@ def get_timeshift(timeshift_file=TIMESHIFT_FILE):
     except IOError as e:
         logging.error(f"Ошибка ввода-вывода {e}")
         return 0
-
-def main():
-    # Расчет виртуального времени
-    target_timestamp = int(time.time()) + get_timeshift()
-    logging.info(f"Виртуальное время {datetime.fromtimestamp(target_timestamp)}")
-
-    # Запуск только из юнита systemd
-    if "INVOCATION_ID" in os.environ:
-        # Замещение процесса на systemd-nspawn
-        args = [
-            "/usr/bin/systemd-nspawn",
-            "--keep-unit",
-            "-M", CONTAINER_NAME,
-            "-D", MERGED_DIR,
-            "/entrypoint.sh", str(target_timestamp)
-        ]
-        os.execv(args[0], args)
 
 if __name__ == "__main__":
     main()

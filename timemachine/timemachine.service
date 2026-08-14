@@ -1,12 +1,13 @@
 [Unit]
-Description=NTP Service Container with TimeMachine
-After=network.target
+Description=Service Container for vlab
+After=network.target systemd-journald.service
+Requires=systemd-journald.service
 
 [Service]
 Type=simple
 Environment="STORAGE_ROOT=/var/lib/machines/timemachine"
 
-# Исправление для restart: гарантированно очищаем имя в machined перед новым запуском!
+# Останов контейнера и размонтирование оверлея на случай некорректного завершения работы прошлого инстанса
 ExecStartPre=-/usr/bin/machinectl terminate timemachine
 ExecStartPre=-/usr/bin/umount -l ${STORAGE_ROOT}/merged
 
@@ -14,9 +15,13 @@ ExecStartPre=-/usr/bin/umount -l ${STORAGE_ROOT}/merged
 ExecStartPre=/usr/bin/mkdir -p ${STORAGE_ROOT}/upper ${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged
 ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=${STORAGE_ROOT}/upper,workdir=${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged
 
-# Запуск
-ExecStart=/usr/local/bin/timemachine.py
+# Пересчет смещения времени
+ExecStartPre=-/usr/local/bin/timemachine.py
 
+# Запуск контейнера
+ExecStart=/usr/bin/systemd-nspawn --keep-unit --machine=timemachine -D ${STORAGE_ROOT}/merged /entrypoint.sh
+
+# Размонтирование оверлея
 ExecStopPost=/usr/bin/umount -l ${STORAGE_ROOT}/merged
 
 KillMode=mixed
