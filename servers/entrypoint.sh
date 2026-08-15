@@ -19,19 +19,20 @@ echo "Запуск изолированного Chronyd..."
 
 # Проверка наличия и чтение файла со смещением времени
 if [ -f "$TIMESHIFT_FILE" ]; then
-    SHIFT=$(cat "$TIMESHIFT_FILE")
+    TIMESHIFT=$(cat "$TIMESHIFT_FILE")
     # Если файл пустой, установить нулевое смещение
-    SHIFT=${SHIFT:-0}
+    TIMESHIFT=${TIMESHIFT:-0}
 else
-    SHIFT=0
+    TIMESHIFT=0
 fi
 
 # Вычисление смещенного времени
-SHIFTED_TIME=$(date -d "@$(($(date +%s) + SHIFT))" +"%Y-%m-%dT%H:%M:%S")
+SHIFTED_TIME=$(date -d "@$(($(date +%s) + TIMESHIFT))" +"%Y-%m-%dT%H:%M:%S")
 
+# NB! Получается, что при каждом перезапуске мы смещаем время, а нужно единожды за сеанс ОС!
 echo "Установка смещенного времени $SHIFTED_TIME"
 chronyc -a settime $SHIFTED_TIME 
-echo "Запрет корректировки дрейфа частов"
+echo "Установка запрета корректировки дрейфа частов"
 chronyc -a manual delete 0
 
 # Удержание контейнера в запущенном состоянии

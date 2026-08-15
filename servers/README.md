@@ -16,7 +16,7 @@
 ├── usr/
 │   └── local/
 │       └── bin/
-│           └── timemachine.py              # Управляющий скрипт
+│           └── timeshifter              # Управляющий скрипт
 │
 └── var/
     └── lib/
@@ -83,7 +83,7 @@ sudo make status
     Process: 36392 ExecStartPre=/usr/bin/umount -l ${STORAGE_ROOT}/merged (code=exited, status=32)
     Process: 36394 ExecStartPre=/usr/bin/mkdir -p ${STORAGE_ROOT}/upper ${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged (code=exited, status=0/SUCCESS)
     Process: 36397 ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=${STORAGE_ROOT}/upper,workdir=${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged (code=exited, status=0/SUCCESS)
-    Process: 36398 ExecStartPre=/usr/local/bin/timemachine.py (code=exited, status=0/SUCCESS)
+    Process: 36398 ExecStartPre=/usr/local/bin/timeshifter (code=exited, status=0/SUCCESS)
    Main PID: 36401 (systemd-nspawn)
       Tasks: 4 (limit: 18854)
      Memory: 12.3M (peak: 12.7M)

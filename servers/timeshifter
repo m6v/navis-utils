@@ -77,6 +77,12 @@ def get_down_timestamp():
 
 def main(timeshift_file=TIMESHIFT_FILE):
     """Рассчитать и вернуть временной сдвиг относительно текущего времени, при критичных ошибках ноль"""
+
+    # Защита от повторного запуска в рамках одной сессии ОС
+    if os.path.exists(STAMP_FILE):
+        logging.info("Корректировка уже выполнялась в этой сессии.")
+        return current_shift
+
     try:
         with open(timeshift_file, "r") as f:
             content = f.read().strip()
@@ -90,11 +96,6 @@ def main(timeshift_file=TIMESHIFT_FILE):
     except IOError as e:
         logging.error(f"Ошибка ввода-вывода {e}")
         return 0
-
-    # Защита от повторного запуска в рамках одной сессии ОС
-    if os.path.exists(STAMP_FILE):
-        logging.info("Корректировка уже выполнялась в этой сессии.")
-        return current_shift
 
     # Получение времени включения машины
     boot_timestamp = get_boot_timestamp()

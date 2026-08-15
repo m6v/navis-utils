@@ -16,7 +16,7 @@ ExecStartPre=/usr/bin/mkdir -p ${STORAGE_ROOT}/upper ${STORAGE_ROOT}/work ${STOR
 ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=${STORAGE_ROOT}/upper,workdir=${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged
 
 # Пересчет смещения времени
-ExecStartPre=-/usr/local/bin/timemachine.py
+ExecStartPre=-/usr/local/bin/timeshifter
 
 # Запуск контейнера
 ExecStart=/usr/bin/systemd-nspawn --keep-unit --machine=vlab-servers -D ${STORAGE_ROOT}/merged /entrypoint.sh

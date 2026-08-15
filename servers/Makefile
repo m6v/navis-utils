@@ -20,8 +20,8 @@ install:
 	@cp -f faketime $(CONF_DIR)/faketime
 	@cp -f vlab-servers.nspawn $(NSPAWN_DIR)/vlab-servers.nspawn
 	@cp -f vlab-servers.service $(SYSTEMD_DIR)/vlab-servers.service
-	@cp -f timemachine.py $(BIN_DIR)/timemachine.py
-	@chmod +x $(BIN_DIR)/timemachine.py
+	@cp -f timeshifter $(BIN_DIR)/timeshifter
+	@chmod +x $(BIN_DIR)/timeshifter
 	@cp -f entrypoint.sh $(PROJECT_DIR)/upper/entrypoint.sh
 	@chmod +x $(PROJECT_DIR)/upper/entrypoint.sh
 	@cp -f chrony.conf $(PROJECT_DIR)/upper/etc/chrony/chrony.conf
@@ -46,7 +46,7 @@ clean:
 	@rm -f $(CONF_DIR)/faketime
 	@rm -f $(NSPAWN_DIR)/vlab-servers.nspawn
 	@rm -f $(SYSTEMD_DIR)/vlab-servers.service
-	@rm -f $(BIN_DIR)/timemachine.py
+	@rm -f $(BIN_DIR)/timeshifter
 	@rm -f $(TIMESHIFT_FILE)
 	@rm -rf $(PROJECT_DIR)
 	@systemctl daemon-reload
