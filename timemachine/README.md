@@ -59,24 +59,20 @@ Bridge=br0
     link/ether 6a:ef:48:dc:74:8b brd ff:ff:ff:ff:ff:ff link-netnsid 0
 ```
 
-## Установка
+## Установка сервера времени
 ```bash
 sudo -i
+# Установка контейнера
 make install
-mount -t overlay overlay -o lowerdir=/,upperdir=/var/lib/machines/timemachine/upper,workdir=/var/lib/machines/timemachine/work /var/lib/machines/timemachine/merged
-systemd-nspawn -M timemachine --keep-unit --register=no -D /var/lib/machines/timemachine/merged /usr/bin/sleep infinity
-# В другой консоли выполнить вход в контейнер
+# Вход в контейнер
 nsenter --target $(machinectl show timemachine -p Leader --value) --mount --net --uts --ipc --pid /bin/bash
-# Внутри контейнера
+# Действия внутри контейнера
 apt install chrony
 # На запрос действия с измененным файлом настройки chrony.conf выбрать "сохранить измененную локальную версию"
 exit
-# В консоли с запущенным контейнером завершить работу, троекратным ^]
-umount /var/lib/machines/timemachine/merged
-make restart
 ```
 
-## Проверка состояния
+## Проверка состояния службы
 ```
 sudo make status
 ● timemachine.service - NTP Service Container with TimeMachine
@@ -109,41 +105,35 @@ Hint: Some lines were ellipsized, use -l to show in full.
 ```
 
 ## Настройка клиентов
+
+### Настройка конфигурации
 ```
 sudo -i
 apt unstall chrony
 
 CONF_PATH="/etc/chrony/chrony.conf"
 
-# Делаем резервную копию chrony.conf
+# Резервное копирование chrony.conf
 cp "$CONF_PATH" "${CONF_PATH}.bak"
 
-# Отключаем дефолтные серверы и пулы
+# Отключаение дефолтных серверовы и пулов
 sed -i 's/^\s*\(server.*\)/# \1/' "$CONF_PATH"
 sed -i 's/^\s*\(pool.*\)/# \1/' "$CONF_PATH"
 
-# Разрешаем безлимитный прыжок времени назад (makestep 1 -1)
+# Разрешение безлимитного прыжка времени назад
 if grep -q "makestep" "$CONF_PATH"; then
     sed -i 's/^\s*makestep.*/makestep 1 -1/' "$CONF_PATH"
 else
     echo "makestep 1 -1" >> "$CONF_PATH"
 fi
 
-# Добавляем сервер времени контейнера timamachine
+# Добавление сервера времени
 echo "server 10.0.0.254 prefer iburst" >> "$CONF_PATH"
 
 systemctl restart chrony
 ```
 
-Принудительное обновление времени
+## Принудительное обновление времени
 ```
 chronyc -a makestep
-```
-
-Определение времени выключения
-```
-tune2fs -l /dev/*** | grep "Last write time"
-last -x shutdown | head -n 3
-sudo grep "rtc" /var/log/syslog | tail -n 5
-sudo grep -E "Group Services|shutdown|poweroff|halt" /var/log/syslog | tail -n 5
 ```
