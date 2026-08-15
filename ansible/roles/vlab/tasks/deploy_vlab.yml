@@ -9,7 +9,7 @@
     state: present
   # Скрыть скрыть вывод stdout
   no_log: true
-  
+
 - name: Остановка и отключение сети default
   shell: |
     virsh net-destroy default 2>/dev/null || true
@@ -58,7 +58,7 @@
   delegate_to: localhost
   become: false
 
-- name: Копирование образов виртуальных машин из files/images в системный пул
+- name: Копирование образов виртуальных машин в системный пул
   synchronize:
     # Слэш на конце src задает копирование содержимого каталога, а не самого каталога
     src: files/images/
@@ -67,7 +67,7 @@
     delete: no
     archive: yes
 
-- name: Настройки дефолтного пула хранения
+- name: Настройка дефолтного пула хранения
   # sg (switch group) переключает группу на libvirt и запускает virsh,
   # так как в рамках текущего сеанса ssh администратор в ней не состоит
   shell:
@@ -77,7 +77,7 @@
     sg libvirt -c "virsh pool-refresh {{ system_pool_name }} 2>/dev/null || true"
   changed_when: false
 
-- name: Копирование иконок из files/icons в системный каталог
+- name: Копирование иконок в системный каталог
   synchronize:
     # Слэш на конце src задает копирование содержимого каталога, а не самого каталога
     src: files/icons/

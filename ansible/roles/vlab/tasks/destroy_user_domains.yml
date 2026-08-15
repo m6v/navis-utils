@@ -1,5 +1,5 @@
 ---
-- name: Поиск образов оверлейных дисков в пользовательском пуле хранения
+- name: Поиск образов оверлейных дисков в пользовательском пуле
   find:
     paths: "{{ user_pool_path }}"
     patterns: "*.qcow2"
@@ -17,18 +17,18 @@
   loop: "{{ user_domains }}"
   failed_when: false
 
-- name: Полное удаление конфигурации доменов пользователя
+- name: Удаление конфигурации доменов пользователя
   command: "virsh undefine {{ item }} --nvram"
   loop: "{{ user_domains }}"
   failed_when: false
 
-- name: Поиск ярлыков на рабочем столе обучаемого, содержащих маркер vlab
+- name: Поиск ярлыков с маркером vlab на рабочем столе пользователя
   shell: "grep -l 'X-Related-To=vlab' {{ desktop_path }}/*.desktop 2>/dev/null"
   register: vlab_shortcuts
   failed_when: false
   changed_when: false
 
-- name: Удаление ярлыков, содержащих маркер vlab
+- name: Удаление ярлыков с маркером vlab
   file:
     path: "{{ item }}"
     state: absent

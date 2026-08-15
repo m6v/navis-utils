@@ -20,7 +20,7 @@ echo "TimeMachine: Запуск изолированного NTP-сервера.
 # Проверка наличия и чтение файла со смещением времени
 if [ -f "$TIMESHIFT_FILE" ]; then
     SHIFT=$(cat "$TIMESHIFT_FILE")
-    # Если файл пустой, то 0
+    # Если файл пустой, установить нулевое смещение
     SHIFT=${SHIFT:-0}
 else
     SHIFT=0
@@ -29,10 +29,8 @@ fi
 # Вычисление смещенного времени
 SHIFTED_TIME=$(date -d "@$(($(date +%s) + SHIFT))" +"%Y-%m-%dT%H:%M:%S")
 
-echo "TimeMachine: Установка смещенного времени $SHIFTED_TIME..."
-chronyc -a "settime $SHIFTED_TIME" 2>/dev/null
-# Указать, что время изменено вручную, и пересчитывать коэффициент корректировки дрейфа не нужно
-chronyc -a "manual delete 0"
+echo "Установка смещенного времени $SHIFTED_TIME и запрет корректировки дрейфа частов..."
+chronyc -a "settime $SHIFTED_TIME; manual delete 0" 2>/dev/null
 
 # Удержание контейнера в запущенном состоянии
 exec /bin/sleep infinity

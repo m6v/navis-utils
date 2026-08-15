@@ -5,10 +5,10 @@ Requires=systemd-journald.service
 
 [Service]
 Type=simple
-Environment="STORAGE_ROOT=/var/lib/machines/timemachine"
+Environment="STORAGE_ROOT=/var/lib/machines/vlab-servers"
 
 # Останов контейнера и размонтирование оверлея на случай некорректного завершения работы прошлого инстанса
-ExecStartPre=-/usr/bin/machinectl terminate timemachine
+ExecStartPre=-/usr/bin/machinectl terminate vlab-servers
 ExecStartPre=-/usr/bin/umount -l ${STORAGE_ROOT}/merged
 
 # Сборка оверлея
@@ -19,7 +19,7 @@ ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=/,upperdir=${STORAGE_
 ExecStartPre=-/usr/local/bin/timemachine.py
 
 # Запуск контейнера
-ExecStart=/usr/bin/systemd-nspawn --keep-unit --machine=timemachine -D ${STORAGE_ROOT}/merged /entrypoint.sh
+ExecStart=/usr/bin/systemd-nspawn --keep-unit --machine=vlab-servers -D ${STORAGE_ROOT}/merged /entrypoint.sh
 
 # Размонтирование оверлея
 ExecStopPost=/usr/bin/umount -l ${STORAGE_ROOT}/merged

@@ -8,10 +8,7 @@ import sys
 import time
 from datetime import datetime
 
-CONTAINER_NAME = "timemachine"
-
 # Настройка путей
-MERGED_DIR = "/var/lib/machines/timemachine/merged"
 TIMESHIFT_FILE = "/etc/timeshift"
 STAMP_FILE = "/run/timemachine.stamp"
 

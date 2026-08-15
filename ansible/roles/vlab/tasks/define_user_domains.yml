@@ -10,7 +10,7 @@
   loop: "{{ user_domains }}"
   failed_when: false
 
-- name: Генерация XML-конфигураций виртуальных машин из шаблонов
+- name: Генерация XML-конфигураций новых виртуальных машин из шаблонов
   template:
     src: "templates/{{ item }}.xml"
     dest: "/tmp/{{ item }}.xml"

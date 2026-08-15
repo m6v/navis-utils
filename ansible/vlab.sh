@@ -2,8 +2,9 @@
 
 set -euo pipefail
 
-# Определить реальный каталог скрипта 
-SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+# Определение реального каталога скрипта
+SCRIPT_DIR=$(dirname "$(readlink -f '$0')")
+echo $SCRIPT_DIR
 # Перейти реальный каталог скрипта перед выполнением остального кода
 cd "$SCRIPT_DIR" || exit 1
 
@@ -28,6 +29,7 @@ PLAYBOOKS=(
     "delete_user.yml"
     "get_users.yml"
 )
+
 
 # Функция отображения меню выбора хостов из инвентаря (тип меню в первом аргументе)
 select_host_from_inventory() {
@@ -103,7 +105,7 @@ run_ansible() {
 
 # Функция запроса имени пользователя
 prompt_user_name() {
-    # Если указан первый аргумент, использовать его как дефолтный логин 
+    # Если указан первый аргумент, использовать его как дефолтный логин
     user_name="${1:-}"
     while true; do
         if user_name=$(whiptail --title "$TITLE" \
@@ -134,10 +136,16 @@ prompt_user_pass() {
     return 0
 }
 
-# Найти учетные записи, входящие в группу astra-admin, если нет, то в группу sudo
-user_name=$(getent group "astra-admin" | cut -d: -f4)
-# Вызвать диалог выбора пользователя с дефолтным именем  с наименьшим id из найденных
-prompt_user_name $(grep -E $user_name /etc/passwd | sort -t: -k3,3n | head -n1 | cut -d: -f1)
+# Найти учетные записи, входящие в группу astra-admin или sudo
+admins="$(getent group 'astra-admin' || getent group 'sudo' | cut -d: -f4)"
+
+# Найти администратора с наименьшим id
+if [ -n "$admins" ]; then
+    default_user="$(grep -E $admins /etc/passwd | sort -t: -k3,3n | head -n1 | cut -d: -f1)"
+fi
+
+# Вызвать диалог выбора пользователя
+prompt_user_name "$default_user"
 prompt_user_pass
 
 ansible_user=$user_name
@@ -177,10 +185,10 @@ while true; do
         fi
         continue
     fi
-    
+
     # Чтение имени плейбука по индексу выбранного пункта меню
     playbook="${PLAYBOOKS[$choice]}"
-    
+
     # Определение типа меню выбора хоста и необходимости выбора имени пользователя
     case "$choice" in
         "2"|"3"|"4"|"5")
