@@ -4,7 +4,7 @@
 set -e
 
 # Переменные пакета
-PACKAGE_NAME="ansible-vlab"
+PACKAGE_NAME="vlab"
 VERSION="1.1.2"
 MAINTAINER="Sergey Mаksimov <m6v@main.ru>"
 DESCRIPTION="Ansible orchestration for virtual laboratory (vlab)"

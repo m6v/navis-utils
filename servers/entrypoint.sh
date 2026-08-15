@@ -10,11 +10,11 @@ sleep 0.5
 
 # Запуск веб-сервера для раздачи репозитория Astra Linux в виртуальные машины УТК-СЗИ
 # в sources.list добавить deb http://10.0.0.254/alse/main 1.7_x86-84 contrib main non-free
-echo "TimeMachine: Запуск веб-сервера репозитория на порту 80..."
+echo "Запуск веб-сервера репозитория на порту 80..."
 python3 -m http.server --directory /srv/repo 80 &
 
 # Запуск Chrony на переднем плане (-d) в фоне самого bash (&)
-echo "TimeMachine: Запуск изолированного NTP-сервера..."
+echo "Запуск изолированного Chronyd..."
 /usr/sbin/chronyd -d -x &
 
 # Проверка наличия и чтение файла со смещением времени
@@ -29,8 +29,10 @@ fi
 # Вычисление смещенного времени
 SHIFTED_TIME=$(date -d "@$(($(date +%s) + SHIFT))" +"%Y-%m-%dT%H:%M:%S")
 
-echo "Установка смещенного времени $SHIFTED_TIME и запрет корректировки дрейфа частов..."
-chronyc -a "settime $SHIFTED_TIME; manual delete 0" 2>/dev/null
+echo "Установка смещенного времени $SHIFTED_TIME"
+chronyc -a settime $SHIFTED_TIME 
+echo "Запрет корректировки дрейфа частов"
+chronyc -a manual delete 0
 
 # Удержание контейнера в запущенном состоянии
 exec /bin/sleep infinity

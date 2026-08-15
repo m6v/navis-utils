@@ -4,8 +4,7 @@ NSPAWN_DIR = /etc/systemd/nspawn
 BIN_DIR = /usr/local/bin
 PROJECT_DIR = /var/lib/machines/vlab-servers
 TIMESHIFT_FILE = /etc/timeshift
-INITIAL_DATE = 2026-01-15 00:00:00
-
+INITIAL_DATE = 2026-01-01 00:00:00
 
 
 .PHONY: all install clean restart status
