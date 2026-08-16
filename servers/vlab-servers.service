@@ -7,7 +7,7 @@ Requires=systemd-journald.service
 Type=simple
 SuccessExitStatus=1
 
-Environment="STORAGE_ROOT=/var/lib/vlab-storage"
+Environment="STORAGE_ROOT=/opt/vlab/storage"
 
 # Размонтирование оверлея на случай некорректного завершения предыдущей сессии
 ExecStartPre=-/usr/bin/umount -l ${STORAGE_ROOT}/merged

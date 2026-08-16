@@ -1,10 +1,8 @@
-CONF_DIR = /etc
 SYSTEMD_DIR = /etc/systemd/system
 NSPAWN_DIR = /etc/systemd/nspawn
-BIN_DIR = /usr/local/bin
-PROJECT_DIR = /var/lib/vlab-storage
+PROJECT_DIR = /opt/vlab/storage
 TIMESHIFT_FILE = /etc/timeshift
-INITIAL_DATE = 2026-01-13 00:00:00
+INITIAL_DATE = 2026-02-23 03:00:00
 
 
 .PHONY: all install clean restart status
@@ -13,11 +11,15 @@ all: install restart
 
 install:
 	@echo "Копирование конфигураций и скриптов..."
+	@mkdir -p $(PROJECT_DIR)/upper
+	@mkdir -p $(PROJECT_DIR)/work
+	@mkdir -p $(PROJECT_DIR)/merged
 	@mkdir -p $(NSPAWN_DIR)
 	@cp -f vlab-servers.nspawn $(NSPAWN_DIR)/vlab-servers.nspawn
 	@cp -f vlab-servers.service $(SYSTEMD_DIR)/vlab-servers.service
 	@cp -f entrypoint.sh $(PROJECT_DIR)/upper/entrypoint.sh
 	@chmod +x $(PROJECT_DIR)/upper/entrypoint.sh
+	@mkdir -p $(PROJECT_DIR)/upper/etc/chrony
 	@cp -f chrony.conf $(PROJECT_DIR)/upper/etc/chrony/chrony.conf
 	@echo $$(( $$(date -d "$(INITIAL_DATE)" +%s) - $$(date +%s))) > $(TIMESHIFT_FILE)
 	@systemctl daemon-reload
