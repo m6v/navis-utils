@@ -1,2 +1,5 @@
 [Network]
 Bridge=virbr0
+
+[Files]
+Bind=/etc/timeshift:/etc/timeshift

@@ -2,7 +2,7 @@ CONF_DIR = /etc
 SYSTEMD_DIR = /etc/systemd/system
 NSPAWN_DIR = /etc/systemd/nspawn
 BIN_DIR = /usr/local/bin
-PROJECT_DIR = /var/lib/machines/vlab-servers
+PROJECT_DIR = /var/lib/vlab-storage
 TIMESHIFT_FILE = /etc/timeshift
 INITIAL_DATE = 2026-01-01 00:00:00
 
@@ -17,7 +17,6 @@ install:
 	@mkdir -p $(PROJECT_DIR)/work
 	@mkdir -p $(PROJECT_DIR)/merged
 	@mkdir -p $(NSPAWN_DIR)
-	@cp -f faketime $(CONF_DIR)/faketime
 	@cp -f vlab-servers.nspawn $(NSPAWN_DIR)/vlab-servers.nspawn
 	@cp -f vlab-servers.service $(SYSTEMD_DIR)/vlab-servers.service
 	@cp -f timeshifter $(BIN_DIR)/timeshifter
@@ -32,7 +31,7 @@ restart:
 	@echo "Перезапуск контейнера..."
 	@systemctl stop vlab-servers || true
 	@umount -l $(PROJECT_DIR)/merged 2>/dev/null || true
-	@systemctl reset-failed vlab-servers || true
+	@systemctl reset-failed vlab-servers 2>/dev/null || true
 	@systemctl restart vlab-servers
 	@echo "Служба успешно запущена."
 
