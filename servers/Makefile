@@ -1,7 +1,7 @@
 UNIT_NAME = vlab-servers
+STORAGE_ROOT = /opt/vlab/storage
 SYSTEMD_DIR = /etc/systemd/system
 NSPAWN_DIR = /etc/systemd/nspawn
-PROJECT_DIR = /opt/vlab/servers
 FAKETIME_FILE = /etc/faketime
 INITIAL_DATE = 2026-02-23 03:00:00
 
@@ -12,21 +12,21 @@ all: install restart
 
 install:
 	@echo "Копирование конфигураций и скриптов..."
-	@mkdir -p $(PROJECT_DIR)/upper
-	@mkdir -p $(PROJECT_DIR)/work
-	@mkdir -p $(PROJECT_DIR)/merged
+	@mkdir -p $(STORAGE_ROOT)/upper
+	@mkdir -p $(STORAGE_ROOT)/work
+	@mkdir -p $(STORAGE_ROOT)/merged
 	@mkdir -p $(NSPAWN_DIR)
 	@cp -f $(UNIT_NAME).nspawn $(NSPAWN_DIR)/$(UNIT_NAME).nspawn
 	@cp -f $(UNIT_NAME).service $(SYSTEMD_DIR)/$(UNIT_NAME).service
-	@cp -f entrypoint.sh $(PROJECT_DIR)/upper/entrypoint.sh
-	@chmod +x $(PROJECT_DIR)/upper/entrypoint.sh
-	@mkdir -p $(PROJECT_DIR)/upper/etc/chrony
-	@cp -f chrony.conf $(PROJECT_DIR)/upper/etc/chrony/chrony.conf
+	@cp -f entrypoint.sh $(STORAGE_ROOT)/upper/entrypoint.sh
+	@chmod +x $(STORAGE_ROOT)/upper/entrypoint.sh
+	@mkdir -p $(STORAGE_ROOT)/upper/etc/chrony
+	@cp -f chrony.conf $(STORAGE_ROOT)/upper/etc/chrony/chrony.conf
 	@echo $$(date -d "$(INITIAL_DATE)" +%s) > $(FAKETIME_FILE)
 	@systemctl daemon-reload
 
 enter:
-	nsenter --target $$(machinectl show $(UNIT_NAME) -p Leader --value) --mount --net --uts --ipc --pid /bin/bash
+	@nsenter --target $$(machinectl show $(UNIT_NAME) -p Leader --value) --mount --net --uts --ipc --pid /bin/bash
 
 restart:
 	@echo "Перезапуск контейнера..."
@@ -46,10 +46,10 @@ status:
 clean:
 	@echo "Удаление проекта..."
 	@systemctl stop $(UNIT_NAME) || true
-	@umount -l $(PROJECT_DIR)/merged 2>/dev/null || true
+	@umount -l $(STORAGE_ROOT)/merged 2>/dev/null || true
 	@rm -f $(NSPAWN_DIR)/$(UNIT_NAME).nspawn
 	@rm -f $(SYSTEMD_DIR)/$(UNIT_NAME).service
 	@rm -f $(TIMESHIFT_FILE)
-	@rm -rf $(PROJECT_DIR)
+	@rm -rf $(STORAGE_ROOT)
 	@systemctl daemon-reload
 	@echo "Очистка завершена."

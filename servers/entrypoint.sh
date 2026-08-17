@@ -6,7 +6,7 @@ start_time=$(date +%s)
 # Если смещенное время не задано, использовать текущее время
 target_time=$(cat "$FAKETIME_FILE" 2>/dev/null || echo "$start_time")
 
-# Настройка сети
+# Настройка сети контейнера
 echo "Configuring container network interface host0..."
 /sbin/ip addr add 10.0.0.254/24 dev host0 2>/dev/null
 /sbin/ip link set dev host0 up 2>/dev/null
