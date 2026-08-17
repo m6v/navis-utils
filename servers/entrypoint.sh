@@ -1,12 +1,11 @@
 #!/bin/bash
 
-# Обязательно должен пробрасываться с хоста в контейнер
 TIMESHIFT_FILE="/etc/timeshift"
 TIMESTAMP_FILE="/etc/timestamp"
 
 # Настройка сети
 echo "Configuring container network interface host0..."
-sleep 0.5
+# sleep 0.5
 /sbin/ip addr add 10.0.0.254/24 dev host0 2>/dev/null
 /sbin/ip link set dev host0 up 2>/dev/null
 

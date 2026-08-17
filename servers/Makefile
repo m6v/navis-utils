@@ -1,11 +1,11 @@
 SYSTEMD_DIR = /etc/systemd/system
 NSPAWN_DIR = /etc/systemd/nspawn
-PROJECT_DIR = /opt/vlab/storage
+PROJECT_DIR = /opt/vlab/servers
 TIMESHIFT_FILE = /etc/timeshift
 INITIAL_DATE = 2026-02-23 03:00:00
 
 
-.PHONY: all install clean restart status
+.PHONY: all install clean restart stop enter status
 
 all: install restart
 
@@ -21,19 +21,26 @@ install:
 	@chmod +x $(PROJECT_DIR)/upper/entrypoint.sh
 	@mkdir -p $(PROJECT_DIR)/upper/etc/chrony
 	@cp -f chrony.conf $(PROJECT_DIR)/upper/etc/chrony/chrony.conf
-	@echo $$(( $$(date -d "$(INITIAL_DATE)" +%s) - $$(date +%s))) > $(TIMESHIFT_FILE)
+	@echo $$(( $$(date -d "$(INITIAL_DATE)" +%s) - $$(date +%s) )) > $(TIMESHIFT_FILE)
 	@systemctl daemon-reload
 
 restart:
 	@echo "Перезапуск контейнера..."
 	@systemctl stop vlab-servers || true
-	@umount -l $(PROJECT_DIR)/merged 2>/dev/null || true
 	@systemctl reset-failed vlab-servers 2>/dev/null || true
 	@systemctl restart vlab-servers
 	@echo "Служба успешно запущена."
 
+stop:
+	@echo "Останов контейнера..."
+	@systemctl stop vlab-servers || true
+	@echo "Служба успешно остановлена."
+
 status:
 	@-systemctl status vlab-servers --no-pager
+
+enter:
+	nsenter --target $$(machinectl show vlab-servers -p Leader --value) --mount --net --uts --ipc --pid /bin/bash
 
 clean:
 	@echo "Удаление проекта..."
