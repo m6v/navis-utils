@@ -2,4 +2,4 @@
 Bridge=virbr0
 
 [Files]
-Bind=/etc/timeshift:/etc/timeshift
+Bind=/etc/faketime:/etc/faketime

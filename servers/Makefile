@@ -2,7 +2,7 @@ UNIT_NAME = vlab-servers
 SYSTEMD_DIR = /etc/systemd/system
 NSPAWN_DIR = /etc/systemd/nspawn
 PROJECT_DIR = /opt/vlab/servers
-TIMESHIFT_FILE = /etc/timeshift
+FAKETIME_FILE = /etc/faketime
 INITIAL_DATE = 2026-02-23 03:00:00
 
 
@@ -22,7 +22,7 @@ install:
 	@chmod +x $(PROJECT_DIR)/upper/entrypoint.sh
 	@mkdir -p $(PROJECT_DIR)/upper/etc/chrony
 	@cp -f chrony.conf $(PROJECT_DIR)/upper/etc/chrony/chrony.conf
-	@echo $$(( $$(date -d "$(INITIAL_DATE)" +%s) - $$(date +%s) )) > $(TIMESHIFT_FILE)
+	@echo $$(date -d "$(INITIAL_DATE)" +%s) > $(FAKETIME_FILE)
 	@systemctl daemon-reload
 
 enter:
