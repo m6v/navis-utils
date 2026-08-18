@@ -1,0 +1,7 @@
+Package: vlab-servers
+Version: 1.5
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: Sergey Maksimov <m6v@mail.ru>
+Description: Container application with chrony inside nspawn

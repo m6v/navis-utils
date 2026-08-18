@@ -4,9 +4,10 @@ SYSTEMD_DIR = /etc/systemd/system
 NSPAWN_DIR = /etc/systemd/nspawn
 FAKETIME_FILE = /etc/faketime
 INITIAL_DATE = 2026-02-23 03:00:00
+BUILD_DIR = /tmp/deb-build
 
 
-.PHONY: all install clean restart stop enter status
+.PHONY: all install clean restart stop enter status arch
 
 all: install restart
 
@@ -32,6 +33,7 @@ install:
 	@systemctl daemon-reload
 
 enter:
+	@echo "Создание архива со структурой оверлея контейнера."
 	@nsenter --target $$(machinectl show $(UNIT_NAME) -p Leader --value) --mount --net --uts --ipc --pid /bin/bash
 
 restart:
@@ -50,6 +52,9 @@ status:
 	@-systemctl status $(UNIT_NAME) --no-pager
 	@-journalctl -u $(UNIT_NAME) --no-pager -n 10
 
+arch: stop
+	@tar --numeric-owner -czpf storage.tar.gz -C $(STORAGE_ROOT) .
+
 clean:
 	@echo "Удаление проекта..."
 	@systemctl stop $(UNIT_NAME) || true
@@ -60,3 +65,30 @@ clean:
 	@rm -rf $(STORAGE_ROOT)
 	@systemctl daemon-reload
 	@echo "Очистка завершена."
+
+deb: stop
+	$(eval PKG_NAME := $(shell awk '/^Package:/ {print $$2}' control))
+	$(eval BASE_VER  := $(shell awk '/^Version:/ {print $$2}' control))
+	$(eval PKG_ARCH := $(shell awk '/^Architecture:/ {print $$2}' control))
+
+	$(eval GIT_REV  := $(shell git rev-list --count HEAD 2>/dev/null || echo 0))
+	$(eval PKG_VER  := $(BASE_VER).$(GIT_REV))
+
+	$(eval TMP_BUILD_DIR := $(shell mktemp -d /tmp/deb-build.XXXXXX))
+
+	@echo "Подготовка структуры deb-пакета..."
+	@mkdir -p $(TMP_BUILD_DIR)/DEBIAN
+	@cp control $(TMP_BUILD_DIR)/DEBIAN/control
+
+	@mkdir -p $(TMP_BUILD_DIR)$(STORAGE_ROOT)
+	@cp -a $(STORAGE_ROOT) $(TMP_BUILD_DIR)$(dir $(STORAGE_ROOT))
+
+	@mkdir -p $(TMP_BUILD_DIR)$(NSPAWN_DIR)
+	@mkdir -p $(TMP_BUILD_DIR)$(SYSTEMD_DIR)
+	@cp $(UNIT_NAME).nspawn $(TMP_BUILD_DIR)$(NSPAWN_DIR)/
+	@cp $(UNIT_NAME).service $(TMP_BUILD_DIR)$(SYSTEMD_DIR)/
+
+	@echo "Сборка deb-пакета..."
+	@sudo dpkg-deb --build $(TMP_BUILD_DIR) $(PKG_NAME)_$(PKG_VER)_$(PKG_ARCH).deb
+	@rm -rf $(TMP_BUILD_DIR)
+	@echo "Пакет успешно собран: $(PKG_NAME)_$(PKG_VER)_$(PKG_ARCH).deb"
