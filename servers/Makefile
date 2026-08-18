@@ -18,10 +18,16 @@ install:
 	@mkdir -p $(NSPAWN_DIR)
 	@cp -f $(UNIT_NAME).nspawn $(NSPAWN_DIR)/$(UNIT_NAME).nspawn
 	@cp -f $(UNIT_NAME).service $(SYSTEMD_DIR)/$(UNIT_NAME).service
+
+	@echo "Установка и настройка chrony в контейнере..."
+	@cd /tmp && apt-get download chrony
+	@mkdir -p $(STORAGE_ROOT)/upper/usr/lib
+	@ln -sfn usr/lib $(STORAGE_ROOT)/upper/lib
+	@dpkg-deb --fsys-tarfile /tmp/chrony*.deb | tar -x --keep-directory-symlink -C $(STORAGE_ROOT)/upper
+	@cp -f chrony.conf $(STORAGE_ROOT)/upper/etc/chrony/chrony.conf
+
 	@cp -f entrypoint.sh $(STORAGE_ROOT)/upper/entrypoint.sh
 	@chmod +x $(STORAGE_ROOT)/upper/entrypoint.sh
-	@mkdir -p $(STORAGE_ROOT)/upper/etc/chrony
-	@cp -f chrony.conf $(STORAGE_ROOT)/upper/etc/chrony/chrony.conf
 	@echo $$(date -d "$(INITIAL_DATE)" +%s) > $(FAKETIME_FILE)
 	@systemctl daemon-reload
 
@@ -42,6 +48,7 @@ stop:
 
 status:
 	@-systemctl status $(UNIT_NAME) --no-pager
+	@-journalctl -u $(UNIT_NAME) --no-pager -n 10
 
 clean:
 	@echo "Удаление проекта..."
