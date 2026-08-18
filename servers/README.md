@@ -4,7 +4,7 @@
 ```
 /
 ├── etc/
-│   ├── timeshift                       # Точка сохранения смещения времени
+│   ├── faketime                        # Cмещенное время (Unixtime)
 │   └── systemd/
 │       ├── nspawn/
 │       │   └── vlab-servers.nspawn     # Сетевой конфиг nspawn (мост virbr0)
@@ -49,6 +49,22 @@ Bridge=br0
 9: vb-vlab-servers@if2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master virbr0 state UP group default qlen 1000
     link/ether 6a:ef:48:dc:74:8b brd ff:ff:ff:ff:ff:ff link-netnsid 0
 ```
+
+## Поднятие моста
+Для тестирования работы контейнера без установленного libvirt необходимо поднять мост вручную с помощью команд
+```
+# Создание моста
+ip link add name virbr0 type bridge
+ip link set dev virbr0 up
+ip addr add 10.0.0.1/24 dev virbr0
+# Удаление моста
+ip link delete virbr0
+```
+Проверка работоспособности контейнера
+```
+curl -L 10.0.0.254
+```
+
 
 ## Установка сервера времени
 

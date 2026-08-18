@@ -80,6 +80,11 @@ deb: stop
 	@mkdir -p $(TMP_BUILD_DIR)/DEBIAN
 	@cp control $(TMP_BUILD_DIR)/DEBIAN/control
 
+	@cp postinst $(TMP_BUILD_DIR)/DEBIAN/postinst
+	@cp prerm $(TMP_BUILD_DIR)/DEBIAN/prerm
+	@chmod 755 $(TMP_BUILD_DIR)/DEBIAN/postinst
+	@chmod 755 $(TMP_BUILD_DIR)/DEBIAN/prerm
+
 	@mkdir -p $(TMP_BUILD_DIR)$(STORAGE_ROOT)
 	@cp -a $(STORAGE_ROOT) $(TMP_BUILD_DIR)$(dir $(STORAGE_ROOT))
 

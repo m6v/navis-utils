@@ -1,0 +1,9 @@
+#!/bin/bash
+
+BASHRC_FILE="/etc/bash.bashrc"
+
+# Если функция присутствует в файле, чисто вырезаем её
+if [ -f "$BASHRC_FILE" ] && grep -q "machinectl()" "$BASHRC_FILE"; then
+    # Удаляем весь блок от объявления функции до закрывающей фигурной скобки
+    sed -i '/machinectl() {/,/}/d' "$BASHRC_FILE"
+fi
