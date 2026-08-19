@@ -20,12 +20,12 @@ install:
 	@cp -f $(UNIT_NAME).nspawn $(NSPAWN_DIR)/$(UNIT_NAME).nspawn
 	@cp -f $(UNIT_NAME).service $(SYSTEMD_DIR)/$(UNIT_NAME).service
 
-	@echo "Установка и настройка chrony в контейнере..."
-	@cd /tmp && apt-get download chrony
-	@mkdir -p $(STORAGE_ROOT)/upper/usr/lib
-	@ln -sfn usr/lib $(STORAGE_ROOT)/upper/lib
-	@dpkg-deb --fsys-tarfile /tmp/chrony*.deb | tar -x --keep-directory-symlink -C $(STORAGE_ROOT)/upper
-	@cp -f chrony.conf $(STORAGE_ROOT)/upper/etc/chrony/chrony.conf
+	@#echo "Установка и настройка chrony в контейнере..."
+	@#cd /tmp && apt-get download chrony
+	@#mkdir -p $(STORAGE_ROOT)/upper/usr/lib
+	@#ln -sfn usr/lib $(STORAGE_ROOT)/upper/lib
+	@#dpkg-deb --fsys-tarfile /tmp/chrony*.deb | tar -x --keep-directory-symlink -C $(STORAGE_ROOT)/upper
+	@#cp -f chrony.conf $(STORAGE_ROOT)/upper/etc/chrony/chrony.conf
 
 	@cp -f entrypoint.sh $(STORAGE_ROOT)/upper/entrypoint.sh
 	@chmod +x $(STORAGE_ROOT)/upper/entrypoint.sh
@@ -67,6 +67,7 @@ clean:
 	@echo "Очистка завершена."
 
 deb: stop
+	@echo "Чтение шаблона deb-пакета..."
 	$(eval PKG_NAME := $(shell awk '/^Package:/ {print $$2}' control))
 	$(eval BASE_VER  := $(shell awk '/^Version:/ {print $$2}' control))
 	$(eval PKG_ARCH := $(shell awk '/^Architecture:/ {print $$2}' control))
