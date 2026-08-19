@@ -40,13 +40,13 @@ while read -r upper_file; do
     
     ((checked++))
 
-    # Если файл существует в нижнем слое, побитовая проверка при совпадении размеров
+    # Если файл существует в нижнем слое, получение размеров файлов
     if [ -f "$lower_file" ]; then
         size_upper=$(stat -c%s "$upper_file")
         size_lower=$(stat -c%s "$lower_file")
         
         if [ "$size_upper" -eq "$size_lower" ]; then
-            # Побитовое сравнение
+            # Побитовое сравнение при совпадении размеров
             if cmp -s "$upper_file" "$lower_file"; then
                 echo "Удаление дубликата: $rel_path"
                 rm -f "$upper_file"
