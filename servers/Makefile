@@ -3,7 +3,7 @@ STORAGE_ROOT = /opt/vlab/storage
 SYSTEMD_DIR = /etc/systemd/system
 NSPAWN_DIR = /etc/systemd/nspawn
 FAKETIME_FILE = /etc/faketime
-INITIAL_DATE = 2026-02-23 03:00:00
+INITIAL_DATE = 2026-01-15 03:00:00
 BUILD_DIR = /tmp/deb-build
 
 
@@ -20,12 +20,12 @@ install:
 	@cp -f $(UNIT_NAME).nspawn $(NSPAWN_DIR)/$(UNIT_NAME).nspawn
 	@cp -f $(UNIT_NAME).service $(SYSTEMD_DIR)/$(UNIT_NAME).service
 
-	@#echo "Установка и настройка chrony в контейнере..."
-	@#cd /tmp && apt-get download chrony
-	@#mkdir -p $(STORAGE_ROOT)/upper/usr/lib
-	@#ln -sfn usr/lib $(STORAGE_ROOT)/upper/lib
-	@#dpkg-deb --fsys-tarfile /tmp/chrony*.deb | tar -x --keep-directory-symlink -C $(STORAGE_ROOT)/upper
-	@#cp -f chrony.conf $(STORAGE_ROOT)/upper/etc/chrony/chrony.conf
+	@echo "Установка и настройка chrony в контейнере..."
+	@cd /tmp && apt-get download chrony
+	@mkdir -p $(STORAGE_ROOT)/upper/usr/lib
+	@ln -sfn usr/lib $(STORAGE_ROOT)/upper/lib
+	@dpkg-deb --fsys-tarfile /tmp/chrony*.deb | tar -x --keep-directory-symlink -C $(STORAGE_ROOT)/upper
+	@cp -f chrony.conf $(STORAGE_ROOT)/upper/etc/chrony/chrony.conf
 
 	@cp -f entrypoint.sh $(STORAGE_ROOT)/upper/entrypoint.sh
 	@chmod +x $(STORAGE_ROOT)/upper/entrypoint.sh
