@@ -8,7 +8,8 @@ cd ansible-vlab/roles/panel/files
 apt install ./*.deb
 
 # Копирование сервера в целевой каталог
-cp index.html server.py /srv/vlab-panel
+mkdir -p /opt/vlab/panel
+cp index.html server.py virt-manager.png /opt/vlab/panel
 
 # Копирование файла токенов в каталог с настройками
 mkdir -p /etc/novnc
