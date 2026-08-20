@@ -1,6 +1,6 @@
 UNIT_NAME = vlab-panel
 TARGET_PATH = /opt/vlab/panel
-SYSTEMD_DIR = /etc/systemd/system
+SYSTEMD_PATH = /etc/systemd/system
 
 
 .PHONY: all deb
@@ -30,8 +30,8 @@ deb:
 	@mkdir -p $(BUILD_PATH)$(TARGET_PATH)
 	@cp -a index.html server.py virt-manager.png $(BUILD_PATH)$(TARGET_PATH)
 
-	@mkdir -p $(BUILD_PATH)$(SYSTEMD_DIR)
-	@cp $(UNIT_NAME).service $(BUILD_PATH)$(SYSTEMD_DIR)
+	@mkdir -p $(BUILD_PATH)$(SYSTEMD_PATH)
+	@cp $(UNIT_NAME).service $(BUILD_PATH)$(SYSTEMD_PATH)
 
 	@mkdir -p $(BUILD_PATH)/etc/novnc
 	@cp -a tokens.json $(BUILD_PATH)/etc/novnc
@@ -40,3 +40,7 @@ deb:
 	@dpkg-deb --build --root-owner-group $(BUILD_PATH) $(PKG_NAME)_$(PKG_VER)_$(PKG_ARCH).deb
 	@rm -rf $(BUILD_PATH)
 	@echo "Пакет успешно собран: $(PKG_NAME)_$(PKG_VER)_$(PKG_ARCH).deb"
+
+clean:
+	rm -rf $(BUILD_PATH)
+	rm -f $(PKG_NAME)
