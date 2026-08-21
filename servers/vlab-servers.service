@@ -16,7 +16,10 @@ ExecStartPre=-/usr/bin/umount -l ${STORAGE_ROOT}/lower
 # Создание папок имонтирование корня ФС
 ExecStartPre=/usr/bin/mkdir -p ${STORAGE_ROOT}/lower ${STORAGE_ROOT}/upper ${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged
 ExecStartPre=/usr/bin/find ${STORAGE_ROOT}/work -mindepth 1 -delete
-ExecStartPre=-/usr/bin/mount --bind -o ro / ${STORAGE_ROOT}/lower
+
+# Монтирование нижнего слоя с корнем ФС и изоляция слоя для предотвращения рекурсии
+ExecStartPre=/usr/bin/mount --bind / ${STORAGE_ROOT}/lower
+ExecStartPre=/usr/bin/mount --make-private ${STORAGE_ROOT}/lower
 
 # Монтирование оверлея и запуск контейнера
 ExecStartPre=/usr/bin/mount -t overlay overlay -o lowerdir=${STORAGE_ROOT}/lower,upperdir=${STORAGE_ROOT}/upper,workdir=${STORAGE_ROOT}/work ${STORAGE_ROOT}/merged
