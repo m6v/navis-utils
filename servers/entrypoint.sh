@@ -12,11 +12,15 @@ echo "Configuring container network interface host0..."
 /sbin/ip link set dev host0 up 2>/dev/null
 
 on_exit() {
+    echo "Stopping background processes..."
+    # Мягкое завершение python3 и chronyd для освобождения дескрипторов файлов в оверлее
+    kill $(jobs -p) 2>/dev/null
+    
     # Здесь нельзя использовать внешние утилиты, поэтому импользуем флаг %(...)T,
     # который умеет брать текущее Unix-время напрямую из памяти самого процесса
     if [ -f "$FAKETIME_FILE" ]; then
         printf -v stop_time '%(%s)T' -1
-        # Увеличить смещенное время на длительность работы контейнера
+        # Увеличение смещенного времени на длительность работы контейнера
         echo $(( target_time + stop_time - start_time )) > "$FAKETIME_FILE"
         sync
     fi
@@ -32,6 +36,9 @@ python3 -m http.server --directory /srv/repo 80 &
 # Запуск chronyd на переднем плане (-d) в фоне самого bash (&)
 echo "Starting chronyd in debug mode with drift correction disabled..."
 /usr/sbin/chronyd -d -x &
+
+# Ожидание, чтобы chronyd успел инициализировать сокет контроля
+sleep 1
 
 # Установка смещенного времени
 echo "Setting offset time to $(date -d "@$target_time" +"%Y-%m-%dT%H:%M:%S")..."
