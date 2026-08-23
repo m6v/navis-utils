@@ -33,6 +33,11 @@ trap "on_exit" EXIT SIGTERM SIGINT
 echo "Starting HTTP repository server on port 80..."
 python3 -m http.server --directory /srv/repo 80 &
 
+# В deban ошибка /bin/busybox: 7: exec: lighttpd: not found, в Astra Linux работает,
+# но без автогенерации листинга директорий (Directory Listing), для apt этого достаточно
+# echo "Starting BusyBox HTTP repository server on port 80..."
+# /bin/busybox httpd -f -p 80 -h /srv/repo -c /dev/null &
+
 # Запуск chronyd на переднем плане (-d) в фоне самого bash (&)
 echo "Starting chronyd in debug mode with drift correction disabled..."
 /usr/sbin/chronyd -d -x &

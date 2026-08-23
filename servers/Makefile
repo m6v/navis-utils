@@ -33,7 +33,7 @@ install:
 	@systemctl daemon-reload
 
 enter:
-	@echo "Создание архива со структурой оверлея контейнера."
+	@echo "Запуск оболочки в контейнере..."
 	@nsenter --target $$(machinectl show $(UNIT_NAME) -p Leader --value) --mount --net --uts --ipc --pid /bin/bash
 
 restart:

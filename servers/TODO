@@ -6,6 +6,29 @@
 echo "Starting BusyBox HTTP repository server on port 80..."
 /bin/busybox httpd -f -p 80 -h /srv/repo &
 ```
-
 Плюс: Работает в разы быстрее Python, потребляет около 2-3 МБ оперативной памяти.
+Минус: Не генерирует листинг директорий, для apt не важно, а для распространения дистрибутивов средств ЗИ важно!
 Результат: Отлично справляется со статической раздачей файлов репозитория для лаборатории.
+
+
+Вариант с опцией `--threading`, но она появилась только в 3.11
+```
+python3 -m http.server --directory /srv/repo --threading 80 &
+```
+
+Вариант с модулем http.server
+```
+echo "Starting multi-threaded Python HTTP repository server on port 80..."
+python3 -c '
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+import os
+
+# Переходим в папку с репозиторием
+os.chdir("/srv/repo")
+
+# ThreadingHTTPServer создает отдельный поток под каждый запрос виртуалки,
+# избавляя от зависаний очереди и ошибок таймаута
+server = ThreadingHTTPServer(("0.0.0.0", 80), SimpleHTTPRequestHandler)
+server.serve_forever()
+' &
+```
