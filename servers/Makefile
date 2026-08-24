@@ -1,10 +1,10 @@
 UNIT_NAME = vlab-servers
-STORAGE_ROOT = /opt/vlab/storage
+BUILD_DIR = /tmp/deb-build
 SYSTEMD_DIR = /etc/systemd/system
 NSPAWN_DIR = /etc/systemd/nspawn
+STORAGE_DIR = /opt/vlab/storage
 FAKETIME_FILE = /etc/faketime
 INITIAL_DATE = 2026-01-15 03:00:00
-BUILD_DIR = /tmp/deb-build
 
 
 .PHONY: all install clean restart stop enter status arch
@@ -13,22 +13,22 @@ all: install restart
 
 install:
 	@echo "Копирование конфигураций и скриптов..."
-	@mkdir -p $(STORAGE_ROOT)/upper
-	@mkdir -p $(STORAGE_ROOT)/work
-	@mkdir -p $(STORAGE_ROOT)/merged
+	@mkdir -p $(STORAGE_DIR)/upper
+	@mkdir -p $(STORAGE_DIR)/work
+	@mkdir -p $(STORAGE_DIR)/merged
 	@mkdir -p $(NSPAWN_DIR)
 	@cp -f $(UNIT_NAME).nspawn $(NSPAWN_DIR)/$(UNIT_NAME).nspawn
 	@cp -f $(UNIT_NAME).service $(SYSTEMD_DIR)/$(UNIT_NAME).service
 
 	@echo "Установка и настройка chrony в контейнере..."
 	@cd /tmp && apt-get download chrony
-	@mkdir -p $(STORAGE_ROOT)/upper/usr/lib
-	@ln -sfn usr/lib $(STORAGE_ROOT)/upper/lib
-	@dpkg-deb --fsys-tarfile /tmp/chrony*.deb | tar -x --keep-directory-symlink -C $(STORAGE_ROOT)/upper
-	@cp -f chrony.conf $(STORAGE_ROOT)/upper/etc/chrony/chrony.conf
+	@mkdir -p $(STORAGE_DIR)/upper/usr/lib
+	@ln -sfn usr/lib $(STORAGE_DIR)/upper/lib
+	@dpkg-deb --fsys-tarfile /tmp/chrony*.deb | tar -x --keep-directory-symlink -C $(STORAGE_DIR)/upper
+	@cp -f chrony.conf $(STORAGE_DIR)/upper/etc/chrony/chrony.conf
 
-	@cp -f entrypoint.sh $(STORAGE_ROOT)/upper/entrypoint.sh
-	@chmod +x $(STORAGE_ROOT)/upper/entrypoint.sh
+	@cp -f entrypoint.sh $(STORAGE_DIR)/upper/entrypoint.sh
+	@chmod +x $(STORAGE_DIR)/upper/entrypoint.sh
 	@echo $$(date -d "$(INITIAL_DATE)" +%s) > $(FAKETIME_FILE)
 	@systemctl daemon-reload
 
@@ -53,16 +53,17 @@ status:
 	@-journalctl -u $(UNIT_NAME) --no-pager -n 10
 
 arch: stop
-	@tar --numeric-owner -czpf storage.tar.gz -C $(STORAGE_ROOT) .
+	@echo "Создание архива верхнего слоя оверлея контейнера..."
+	@tar --numeric-owner -czpf storage.tar.gz -C $(STORAGE_DIR) .
 
 clean:
 	@echo "Удаление проекта..."
 	@systemctl stop $(UNIT_NAME) || true
-	@umount -l $(STORAGE_ROOT)/merged 2>/dev/null || true
+	@umount -l $(STORAGE_DIR)/merged 2>/dev/null || true
 	@rm -f $(NSPAWN_DIR)/$(UNIT_NAME).nspawn
 	@rm -f $(SYSTEMD_DIR)/$(UNIT_NAME).service
 	@rm -f $(TIMESHIFT_FILE)
-	@rm -rf $(STORAGE_ROOT)
+	@rm -rf $(STORAGE_DIR)
 	@systemctl daemon-reload
 	@echo "Очистка завершена."
 
@@ -86,8 +87,8 @@ deb: stop
 	@chmod 755 $(TMP_BUILD_DIR)/DEBIAN/postinst
 	@chmod 755 $(TMP_BUILD_DIR)/DEBIAN/prerm
 
-	@mkdir -p $(TMP_BUILD_DIR)$(STORAGE_ROOT)
-	@cp -a $(STORAGE_ROOT) $(TMP_BUILD_DIR)$(dir $(STORAGE_ROOT))
+	@mkdir -p $(TMP_BUILD_DIR)$(STORAGE_DIR)
+	@cp -a $(STORAGE_DIR) $(TMP_BUILD_DIR)$(dir $(STORAGE_DIR))
 
 	@mkdir -p $(TMP_BUILD_DIR)$(NSPAWN_DIR)
 	@mkdir -p $(TMP_BUILD_DIR)$(SYSTEMD_DIR)

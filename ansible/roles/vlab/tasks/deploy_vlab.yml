@@ -47,16 +47,14 @@
       - libvirt-admin
     append: yes
 
-- name: Сборка distros.iso
-  shell: >
-    genisoimage -input-charset utf-8 -r -J -joliet-long -U
-    -o {{ role_path }}/files/images/distros.iso
-    {{ role_path }}/files/distros
-  args:
-    # Выполнять только при отсутствии distros.iso
-    creates: "{{ role_path }}/files/images/distros.iso"
-  delegate_to: localhost
-  become: false
+- name: Создание локального репозитория с дистрибутивами средств защиты
+  synchronize:
+    # Слэш на конце src задает копирование содержимого каталога, а не самого каталога
+    src: files/distros/
+    dest: "{{ local_repo_path }}/"
+    recursive: yes
+    delete: no
+    archive: yes
 
 - name: Копирование образов виртуальных машин в системный пул
   synchronize:

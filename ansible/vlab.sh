@@ -12,6 +12,11 @@ TITLE="Панель управления рабочими станциями У�
 INVENTORY_FILE="hosts"
 HINT="Управление: [Стрелки] - движение, [Tab] - кнопки, [Enter] - выбор"
 
+# Перезапуск от root, если скрипт запущен от обычного пользователя
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$0" "$@"
+fi
+
 # Проверка наличия файла инвентаря
 if [ ! -f "$INVENTORY_FILE" ]; then
     whiptail --title "Ошибка" --msgbox "Файл инвентаря '$INVENTORY_FILE' не найден!" 8 55
@@ -137,7 +142,7 @@ prompt_user_pass() {
 }
 
 # Найти учетные записи, входящие в группу astra-admin или sudo
-admins="$(getent group 'astra-admin' || getent group 'sudo' | cut -d: -f4)"
+admins=$( (getent group 'astra-admin' || getent group 'sudo') | cut -d: -f4 )
 
 # Найти администратора с наименьшим id
 if [ -n "$admins" ]; then
