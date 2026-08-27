@@ -13,9 +13,13 @@ echo "Configuring container network interface host0..."
 
 on_exit() {
     echo "Stopping background processes..."
-    # Мягкое завершение python3 и chronyd для освобождения дескрипторов файлов в оверлее
+    # Отправка сигнала SIGTERM (15) для мягкого завершения python3 и chronyd
     kill $(jobs -p) 2>/dev/null
-    
+
+    # Ожидание завершения фоновых процессов (Graceful Shutdown) или таймаута
+    # (90 секунд по дефолту или значения, установленного в TimeoutStopSec)
+    wait
+
     # Здесь нельзя использовать внешние утилиты, поэтому импользуем флаг %(...)T,
     # который умеет брать текущее Unix-время напрямую из памяти самого процесса
     if [ -f "$FAKETIME_FILE" ]; then
