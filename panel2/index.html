@@ -201,8 +201,8 @@
         
         const host = window.location.hostname;
         
-        // Корректный путь: vnc.html берем с порта Python, а websockify на порту Go (8085)
-        iframe.src = `http://${host}:${pythonPort}/vnc.html?autoconnect=true&resize=scale&host=${host}&port=${websockifyPort}&path=?token=${token}`;
+        // vnc.html берем с порта server.py, а websockify на порту websockify (8085)
+        iframe.src = `http://${host}:${pythonPort}/noVNC-1.6.0/vnc.html?autoconnect=true&resize=scale&host=${host}&port=${websockifyPort}&path=?token=${token}`;
     }
 
     function toggleNode(nodeElement, sublistElement) {

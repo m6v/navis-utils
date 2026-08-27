@@ -76,8 +76,8 @@ def rebuild_flat_tokens():
 
 class NoVNCHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        # Говорим Python отдавать статику строго из папки noVNC-1.6.0
-        super().__init__(*args, directory=NOVNC_WEB_ROOT, **kwargs)
+        # Говорим Python отдавать статику строго из BASE_DIR
+        super().__init__(*args, directory=BASE_DIR, **kwargs)
 
     def do_GET(self):
         # Перехватываем только запрос к API, всё остальное обработает SimpleHTTPRequestHandler
