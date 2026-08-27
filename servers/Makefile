@@ -96,6 +96,6 @@ deb: stop
 	@cp $(UNIT_NAME).service $(TMP_BUILD_DIR)$(SYSTEMD_DIR)/
 
 	@echo "Сборка deb-пакета..."
-	@sudo dpkg-deb --build $(TMP_BUILD_DIR) $(PKG_NAME)_$(PKG_VER)_$(PKG_ARCH).deb
+	@sudo dpkg-deb --build git $(PKG_NAME)_$(PKG_VER)_$(PKG_ARCH).deb
 	@rm -rf $(TMP_BUILD_DIR)
 	@echo "Пакет успешно собран: $(PKG_NAME)_$(PKG_VER)_$(PKG_ARCH).deb"
