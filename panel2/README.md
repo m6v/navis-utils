@@ -76,3 +76,43 @@ cp golang/websokify /opt/vlab/panel
 Стало: Весь проект теперь — это одна изолированная папка (например, /opt/vlab-panel/). Скрипт, бинарник, конфигурационный JSON и папка с HTML-страницами лежат вместе. Проект можно просто скопировать и перенести на другую ЭВМ с Astra Linux, где он запустится без доролнительных настроек и прав root.
 
 Общий размер проекта 7.1 МБ
+
+
+# Инструкция по сборке ipc-master и ipc-slave
+
+Перед запуском установки создадим два файла в вашей рабочей директории (например, /var/lib/libvirt/images/):
+
+Образ основного диска (qcow2) для будущей ОС создают, выполнив команду
+```
+qemu-img create -f qcow2 /var/lib/libvirt/images/ipc-master.qcow2 2G
+```
+
+Образ виртуального USB-носителя (raw) создают, выполнив команду
+```
+qemu-img create -f raw /var/lib/libvirt/images/usb.raw 64M
+mkfs.vfat -F 32 /var/lib/libvirt/images/usb.raw
+```
+
+НЕ ЗАРАБОТАЛО, НУЖНО РАЗБИРАТЬСЯ!!!
+Консольную установку запускают, выполнив команду
+```
+virt-install \
+  --name=ipc-master \
+  --ram=512 \
+  --vcpus=1 \
+  --os-variant=freebsd12.4 \
+  --disk path=/var/lib/libvirt/images/ipc-master.qcow2,format=qcow2,bus=virtio \
+  --disk path=/var/lib/libvirt/images/usb.raw,format=raw,bus=usb \
+  --cdrom=/var/lib/libvirt/images/fw_3.9.1.2732_out_fsb_disk1.iso \
+  --network default \
+  --graphics vnc,listen=127.0.0.1,port=5901 \
+  --events on_reboot=restart \
+  --check path_in_use=off \
+  --noautoconsole
+```
+
+Примечания
+- --disk ...,bus=usb — подключает созданный образ usb-flash.raw именно как эмуляцию USB-флешки, инсталлятор внутри ВМ увидит её как полноценный съемный накопитель /dev/sdb (или аналогичный диск).
+- --graphics none — полностью отключает видеокарту ВМ;
+- --extra-args="console=ttyS0 text" — заставляет ядро Linux активировать текстовый режим (text) и направлять весь вывод инсталлятора через первый последовательный порт напрямую в текущий терминал хоста;
+- --on-reboot=destroy — после завершения устновки выключить машину вместо перезагрузки
