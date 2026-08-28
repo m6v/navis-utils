@@ -15,16 +15,18 @@ CURRENT_WEBSOCKIFY_PORT = 8085
 # Определение путей относительно расположения server.py
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEBSOCKIFY_BIN = os.path.join(BASE_DIR, 'websockify')
-NOVNC_WEB_ROOT = os.path.join(BASE_DIR, 'noVNC-1.6.0')
+NOVNC_DIR = os.path.join(BASE_DIR, 'noVNC-1.6.0')
 JSON_TOKENS_FILE = os.path.join(BASE_DIR, 'tokens.json') 
 
 FLAT_TOKENS_FILE = '/tmp/tokens.txt'
 
 def check_port(ip, port):
-    """Проверка, открытия TCP-порта VNC на удаленной ЭВМ"""
+    """Проверка открытия TCP-порта VNC на удаленной ЭВМ"""
     try:
+        # Использование AF_INET напрямую оптимизирует создание сокета
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.settimeout(0.1)
+            # connect_ex возвращает 0 при успешном подключении
             result = sock.connect_ex((ip, int(port)))
             return result == 0
     except Exception:
@@ -82,6 +84,9 @@ class NoVNCHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=BASE_DIR, **kwargs)
 
     def do_GET(self):
+        # Явное указание использования глобальных переменных для предотвращения Scope-ошибок
+        global CURRENT_PYTHON_PORT, CURRENT_WEBSOCKIFY_PORT
+
         # Перехват запросов к API, обработка остальных запросов в SimpleHTTPRequestHandler
         if self.path == '/api/tokens':
             self.send_response(200)
@@ -121,7 +126,7 @@ def start_websockify(websockify_port):
         )
         return process
     except FileNotFoundError:
-        print(f"Ошибка: Файл {WEBSOCKIFY_BIN} не найден!", file=sys.stderr)
+        print(f"Ошибка: Файл {WEBSOCKIFY_BIN} not found!", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == '__main__':
@@ -140,8 +145,8 @@ if __name__ == '__main__':
     CURRENT_WEBSOCKIFY_PORT = args.wport
 
     # Проверка наличия каталога с novnc
-    if not os.path.exists(NOVNC_WEB_ROOT):
-        print(f"Ошибка: каталог с novnc {NOVNC_WEB_ROOT} не найден!", file=sys.stderr)
+    if not os.path.exists(NOVNC_DIR):
+        print(f"Ошибка: каталог с novnc {NOVNC_DIR} не найден!", file=sys.stderr)
         sys.exit(1)
 
     rebuild_flat_tokens()
@@ -152,6 +157,7 @@ if __name__ == '__main__':
     print(f"Панель инструктора запущена на http://localhost:{args.port}")
 
     try:
+        # Использование многопоточного сервера для обработки параллельных запросов
         server = http.server.ThreadingHTTPServer(('0.0.0.0', args.port), NoVNCHandler)
         server.serve_forever()
     except BaseException:
