@@ -185,8 +185,8 @@
 </div>
 
 <script>
-    const pythonPort = 8000;      // Порт веб-сервера (Python)
-    const websockifyPort = 8085;  // Порт прокси (Go-websockify)
+    let pythonPort = 8000;      // Порт веб-сервера (server.py)
+    let websockifyPort = 8085;  // Порт прокси (websockify)
     
     const treeContainer = document.getElementById('pve-tree');
     const iframe = document.getElementById('vnc-frame');
@@ -214,6 +214,15 @@
         fetch('/api/tokens')
             .then(response => response.json())
             .then(data => {
+                // Автоматическое извлечение и обновление портов из секции config
+                if (data.config) {
+                    pythonPort = data.config.pythonPort;
+                    websockifyPort = data.config.websockifyPort;
+                }
+
+                // Получение дерева хостов из секции tree, если сервер прислал старый формат, берем data целиком)
+                const treeData = data.tree || data;
+
                 const manualStates = {};
                 document.querySelectorAll('.node-item').forEach(el => {
                     const titleEl = el.querySelector('span:not(.node-toggle)');
@@ -222,9 +231,9 @@
 
                 treeContainer.innerHTML = '';
                 
-                Object.keys(data).forEach(nodeName => {
-                    const nodeIp = data[nodeName]["ip"];
-                    const vmsList = data[nodeName]["vms"];
+                Object.keys(treeData).forEach(nodeName => {
+                    const nodeIp = treeData[nodeName]["ip"];
+                    const vmsList = treeData[nodeName]["vms"];
                     const nodeFullTitle = `${nodeName} (${nodeIp})`;
                     
                     const sublist = document.createElement('ul');
@@ -243,8 +252,15 @@
                         
                         const vmItem = document.createElement('li');
                         vmItem.className = 'vm-item';
-                        // Восстанавливаем красивое имя без префикса хоста
-                        vmItem.innerText = tokenName.split('-').slice(1).join('-'); 
+                        
+                        // Удаление имени узла (первая часть токена до дефиса)
+                        let cleanName = tokenName.split('-').slice(1).join('-');
+                        
+                        // Удаление префиксов (цифры и дефисы в начале строки, например, 1-, 02-)
+                        cleanName = cleanName.replace(/^\d+-+/, '');
+                        
+                        // Запись очищенного имени в элемент списка
+                        vmItem.innerText = cleanName; 
                         
                         if (status === 'online') {
                             vmItem.classList.add('online');
@@ -259,14 +275,12 @@
                         sublist.appendChild(vmItem);
                     });
 
-                    // Авторазвертывание только тех веток, где есть включенные ВМ
                     if (nodeHasActiveVms) {
                         node.classList.add('node-active');
                         node.classList.remove('collapsed');
                         sublist.classList.remove('hidden');
                     }
 
-                    // Восстановление ручного сворачивания инструктором
                     if (manualStates[nodeFullTitle] !== undefined) {
                         if (manualStates[nodeFullTitle] === true) {
                             node.classList.add('collapsed');
@@ -281,12 +295,15 @@
                     treeContainer.appendChild(sublist);
                 });
             })
-            .catch(err => console.error('Ошибка обновления дерева:', err));
+            .catch(err => console.error('Ошибка обновления дерева:', err))
+            .finally(() => {
+                // Отправка следующего запроса через 5 секунд после завершения текущего
+                setTimeout(loadTreeData, 5000);
+            });
     }
 
     // Запуск первичного рендеринга и цикл автообновления дерева раз в 5 секунд
     loadTreeData();
-    setInterval(loadTreeData, 5000);
 </script>
 </body>
 </html>
