@@ -547,7 +547,7 @@ sudo find /srv/ansible-vlab -type d -exec chmod g+s {} +
 ```bash
 virsh -c qemu:///system qemu-agent-command "$DOMAIN_NAME" '{"execute":"guest-get-time"}'
 ```
-
+## Настройки параметров
 NB! При запуске ВМ с дисками в домашнем каталоге в убунте нужно в файл `/etc/libvirt/qemu.conf` добавить параметр `security_driver = "none"`, как обстоит ситуация в Астре уточнить!
 
 Чтобы при запуске графического интерфейса virt-manager сразу отображалось и автоматически открывалось подключение к пользовательской сессии, нужно настроить параметры virt-manager.
