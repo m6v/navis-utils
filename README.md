@@ -1,10 +1,12 @@
 # Подготовительные действия
 
-## Создание образов дисков
+Создание образов дисков
+```
 qemu-img create -f qcow2 arm-abi.qcow2 16G
 qemu-img create -f qcow2 srv-szi.qcow2 32G
+```
 
-## Настройка пула
+Настройка пула
 ```
 # Создать каталог пула
 mkdir -p ~/.local/share/libvirt/images"
@@ -18,7 +20,7 @@ virsh -с qemu:///session pool-autostart default
 echo 'security_driver = "none"' >> ~/.config/libvirt/qemu.conf
 ```
 
-## Создание сети
+Создание сети
 ```
 # Зарегистрировать сеть intnet в системной сессии libvirt
 echo "<network><name>intnet</name><bridge name='virbr0' stp='on' delay='0'/></network>" | sudo virsh net-define /dev/stdin
@@ -28,7 +30,7 @@ sudo virsh net-autostart intnet
 sudo virsh net-start intnet
 ```
 
-## Настройка разрешения на подключение машин в пользовательской сессии, к мостам virbr0 и virbr1
+Настройка разрешения на подключение машин в пользовательской сессии, к мостам virbr0 и virbr1
 ```
 sudo mkdir -p /etc/qemu
 echo "allow virbr0" | sudo tee -a /etc/qemu/bridge.conf
@@ -55,14 +57,16 @@ virsh -c qemu:///session list --name | xargs -I {} virsh -c qemu:///session dest
 virsh -c qemu:///session list --all --name | xargs -I {} virsh -c qemu:///session undefine "{}" --nvram
 ```
 
-# Инструкция по развертыванию АРМ-О
+# Инструкция по созданию образа ВМ "Рубикон"
+ВМ "Рубикон" использует образ, поставляемый разработчиком.
 
-## Установка ОС
-Установку ОС выполняют с настройками по умолчанию, при выборе компонентов отмечают:
+# Инструкция по созданию образа ВМ "АРМ-О"
+
+Установку ОС "Astra Linux SE" выполняют с настройками по умолчанию, при выборе компонентов отмечают:
 - Консольные утилиты
 - Средство удаленного управления ssh
 
-## Настройка статического адреса интерфейса eth0
+Статический адрес интерфейса eth0 настраивают, выполнив команду
 ```bash
 cat << EOF >> /etc/network/interfaces
 auto eth0
@@ -73,24 +77,23 @@ iface eth0 inet static
 EOF
 ```
 
-## Отключение неиспользуемых служб
+Отключают неиспользуемые службы, выполнив команду
 ```bash
 sistemctl disable avahi-daemon cups parsec-kiosk2 ufw wpa_supplicant
 ```
 
-## Устранение ошибки запуска службы astra-event-diagnostics-healthcheck.service
-Для устранения ошибки "No module named pkg_resources" при запуске службы `astra-event-diagnostics-healthcheck.service` установить пакет `python3-pkg-resources`
+Для устранения ошибки "No module named pkg_resources" при запуске службы `astra-event-diagnostics-healthcheck.service` устанавливают пакет `python3-pkg-resources`, выполнив команду
 ```bash
 apt install python3-pkg-resources
 ```
 
-## Установка docker
+Устанавливают docker, выполнив команду
 ```bash
 apt install docker.io docker-compose
 usermod -aG docker administrator
 ```
 
-## Отключение проверки уязвимостей OpenSCAP в Docker
+Отключают проверки уязвимостей OpenSCAP в Docker, выполнив команду
 ```bash
 mkdir -p /etc/docker
 cat << EOF > /etc/docker/daemon.json
@@ -101,13 +104,28 @@ EOF
 systemctl restart docker
 ```
 
-## Установка образа heywoodlh/vulnerable
+Загружают образ `heywoodlh/vulnerable`, выполнив команду
+```
+docker pull heywoodlh/vulnerable
+```
+> Сведения о загруженном образе можно получить, выполнив команду `docker image inspect heywoodlh/vulnerable`
 
-Используется предварительно скачанный и загруженный в архив образ `heywoodlh/vulnerable`
+
+Сохраняют загруженный образ в архив, выполнив команду
+```
+docker save heywoodlh/vulnerable | gzip > vulhub_metasploitable3.tar.gz
+```
+> Размер полученного архива 1109205130 байт
+
+Если загрузка образа выполнялась на другой ЭВМ, устанавливают предварительно скачанный и загруженный в архив образ `heywoodlh/vulnerable`, выполнив команду
 ```bash
 mount /dev/sr0 /media/cdrom
-docker load -i /media/cdrom/vulhub_metasploitable3.tar
+docker load -i /media/cdrom/vulhub_metasploitable3.tar.gz
+```
 
+Создают файл конфигурации (манифест) контейнера
+>TODO Заменить docker-compose.yml на compose.yaml и проверить в Астре
+```
 mkdir -p /opt/vulhub/metasploitable3
 cat << EOF > /opt/vulhub/metasploitable3/docker-compose.yml
 version: '3.3'
@@ -131,8 +149,13 @@ services:
       - "8181:8181"  # Web Management / Proxy
 EOF
 ```
+> Согласно актуальной спецификации Docker Compose, правильными считаются следующие имена (в порядке приоритета, в котором их ищет Docker):
+compose.yaml — современный стандарт, рекомендованный Docker.
+compose.yml
+docker-compose.yaml — классический вариант, который использовался годами и до сих пор остается самым популярным.
+docker-compose.yml
 
-## Тестовый запуск контейнера
+Выполняют тестовый запуск контейнера, выполнив команду
 ```bash
 sudo docker-compose -f /opt/vulhub/metasploitable3/docker-compose.yml up -d
 docker ps
@@ -140,7 +163,7 @@ docker ps
 ef371694d2f3   heywoodlh/vulnerable   "/usr/bin/supervisord"   16 minutes ago   Up 26 seconds   0.0.0.0:21->21/tcp, :::21->21/tcp, 0.0.0.0:80->80/tcp, :::80->80/tcp, 0.0.0.0:445->445/tcp, :::445->445/tcp, 0.0.0.0:631->631/tcp, :::631->631/tcp, 0.0.0.0:3000->3000/tcp, :::3000->3000/tcp, 0.0.0.0:3306->3306/tcp, :::3306->3306/tcp, 0.0.0.0:3500->3500/tcp, :::3500->3500/tcp, 0.0.0.0:6697->6697/tcp, :::6697->6697/tcp, 0.0.0.0:8181->8181/tcp, :::8181->8181/tcp, 0.0.0.0:2222->22/tcp, :::2222->22/tcp   metasploitable3
 ```
 
-## Создание юнита для автозапуска контейнера metasploitable3
+Создают юнит автозапуска контейнера metasploitable3, выполнив команду
 ```bash
 cat << EOF > /etc/systemd/system/metasploitable3.service
 [Unit]
@@ -166,19 +189,15 @@ systemctl daemon-reload
 systemctl enable --now metasploitable3.service
 ```
 
-# Инструкция по развертыванию АРМ управления СКЗИ
-
-> TODO Рассмотреть возможность использования Windows в контейнере
-См. [https://github.com/dockur/windows].
-    [https://habr.com/ru/companies/ruvds/articles/901004/]
+# Инструкция по созданию образа ВМ "АРМ управления СКЗИ"
 
 Создают чистый образ диска
-```
+```bash
 qemu-img create -f qcow2 /var/lib/libvirt/images/arm-ipc.qcow2 16G
 ```
 
 Запускают установку Windows командой
-```
+```bash
 qemu-system-x86_64 \
   -name arm-ipc \
   -m 4096 \
@@ -202,8 +221,7 @@ qemu-system-x86_64 \
 ```
 Подключаются любым клиентом vnc по адресу `localhost:5904`. При установке указывают имя пользователя `admin` и пароль `11111111`, при выборе параметров приватности отключают все переключатели.
 
-Чистая установка
-arm-ipc.qcow2      9,455,730,688
+Размер образа после установки 9,455,730,688 байт
 
 С указанными настройками внутри запущенного процесса qemu-system-x86_64 эмулируются DHCP-сервер и интерфейс с адресом 10.0.2.2.
 
@@ -216,9 +234,10 @@ arm-ipc.qcow2      9,455,730,688
 (Это добавит русскую раскладку. Переключение клавиатуры: Alt + Shift или Win + Space).
 
 На хосте в каталоге с установочными файлами программы управления ЦУС "Континент" запускают http-сервер, выполнив команду
-```
+```bash
 python3 -m http.server 8000
 ```
+
 В виртуальной машине открывают браузер, вводят адрес 10.0.2.2:8000 и скачивают установочные файлы.
 
 Устанавливают *.msi файл
@@ -226,29 +245,29 @@ python3 -m http.server 8000
 
 Извлечь диск
 
-```
+```bash
 # Посмотреть список блочных устройств, определить в нем привод с подключенным установочным образом windows, например, ide1-cd0
 echo "info block" | nc -q 0 -U /tmp/win10-monitor.sock; echo
 echo "eject ide1-cd0" | nc -q 0 -U /tmp/win10-monitor.sock
 ```
 
 Смена диска
-```
+```bash
 echo "change cdrom0 /var/lib/libvirt/images/новое_имя.iso" | nc -q 0 -U /tmp/win10-monitor.sock
 ```
 
 Принудительное выключение машины
-```
+```bash
 pkill -9 -f "qemu-system-x86_64.*arm-ipc"
 ```
 
-# Инструкция по сборке ipc-master и ipc-slave
+# Инструкция по созданию образа ВМ "КШ с ЦУС" (ipc-master) и "КШ" (ipc-slave)
 
 Перед запуском установки создадим два файла в вашей рабочей директории (например, /var/lib/libvirt/images/):
 
 
 Образ виртуального USB-носителя (raw) создают, выполнив команду
-```
+```bash
 qemu-img create -f raw /var/lib/libvirt/images/usb.raw 64M
 # FAT32 рассчитана на тома от 512 МБ (хотя mkfs.vfat позволяет принудительно отформатировать 64 МБ). Если ВМ откажутся читать такой диск, при пересоздании указать FAT16 (mkfs.vfat -F 16), которая идеально подходит для маленьких объемов
 mkfs.vfat -F 32 /var/lib/libvirt/images/usb.raw
@@ -257,13 +276,13 @@ mkfs.vfat -F 32 /var/lib/libvirt/images/usb.raw
 ## Образ виртуального диска ЦУС "АПКШ Континент" создают в следующем порядке
 
 Чистый образ диска (ipc-master.qcow2) создают, выполнив команду
-```
+```bash
 qemu-img create -f qcow2 /var/lib/libvirt/images/ipc-master.qcow2 2G
 ```
 
 Или без использования libvirt и virsh
 
-```
+```bash
 qemu-system-x86_64 \
   -name ipc-master \
   -m 512 \
@@ -291,31 +310,7 @@ qemu-system-x86_64 \
 >NB! Установка с CD-диска проходит нормально, а при последующей перезагрузке инициализируется ядро FreeBSD, которое переключает вывод на vidconsole и дальнейшая работа становится невозможной, так как в консоли не отображаются запросы системы к пользователю. 
 
 Запускают виртуальную машину `ipc-master`
-```
-qemu-system-x86_64 \
-  -name ipc-master \
-  -m 512 \
-  -smp 1 \
-  -enable-kvm \
-  -cpu host \
-  -machine q35 \
-  -device qemu-xhci,id=usb \
-  -drive file=/var/lib/libvirt/images/ipc-master.qcow2,if=none,id=disk0,format=qcow2,cache=writeback \
-  -device ide-hd,drive=disk0,bus=ide.1 \
-  -drive file=/var/lib/libvirt/images/fw_3.9.1.2732_out_fsb_disk1.iso,media=cdrom,readonly=on \
-  -drive file=/var/lib/libvirt/images/usb.raw,if=none,id=usbdisk,format=raw \
-  -device usb-storage,bus=usb.0,drive=usbdisk,removable=on \
-  -netdev user,id=net0 -device e1000,netdev=net0,mac=08:00:27:3e:be:f1 \
-  -netdev user,id=net1 -device e1000,netdev=net1,mac=08:00:27:3e:be:f2 \
-  -serial unix:/tmp/ipc.sock,server,nowait \
-  -display none \
-  -boot order=d \
-  -no-reboot \
-  -daemonize
-```
-
-Без USB-флеш
-```
+```bash
 qemu-system-x86_64 \
   -name ipc-master \
   -m 512 \
@@ -442,11 +437,11 @@ nc -U /tmp/ipc.sock
 ## Образ виртуального диска КШ "АПКШ Континент" создают в следующем порядке
 
 Чистый образ диска (ipc-master.qcow2) создают, выполнив команду
-```
+```bash
 qemu-img create -f qcow2 /var/lib/libvirt/images/ipc-slave.qcow2 2G
 ```
 
-```
+```bash
 qemu-system-x86_64 \
   -name ipc-master \
   -m 512 \
@@ -499,9 +494,6 @@ VersionInfo.txt                                    93
 Континент. Подсистема управления.msi       87,327,744
 
 
-
-
-
 rubicon.qcow2                           2,192,965,632
 
 astra-1.7_x86-64 amd64.iso              3,851,223,040
@@ -510,35 +502,39 @@ main_update-1.7.6.15-15.11.24_17.20.iso 4,396,134,400
 
 
 Принудительная остановка командой
-```
+```bash
 pkill -9 -f "qemu-system-x86_64.*ipc-master"
 ```
 
 # Инструкция по ручному развертыванию и использованию vlab
 
-1. Создаем каталог под правами root:
-```
+1. Создают каталог под правами root, выполнив команду
+```bash
 sudo mkdir -p /srv/ansible-vlab
 ```
-2. Копируем туда файлы проекта
-3. Настраиваем права доступа через общую группу:
-Обычно на таких серверах все администраторы уже входят в группу sudo или wheel. Давайте отдадим права этой группе
-```
-# Меняем владельца на root, а группу — на sudo
-sudo chown -R root:sudo /srv/ansible-vlab
 
-# Даем права: root и группа sudo могут читать/писать/выполнять, остальные — ничего
+2. Копируют туда файлы проекта, выполнив команду
+
+3. Настраивают права доступа через общую группу
+Обычно на таких серверах все администраторы уже входят в группу sudo или wheel
+```bash
+# Изменение владельца и прав
+sudo chown -R root:sudo /srv/ansible-vlab
 sudo chmod -R 770 /srv/ansible-vlab
 ```
-4. Включаем SGID-бит
+
+4. Включают SGID-бит
 Если один администратор создаст внутри проекта новый файл (например, новый плейбук или лог), по умолчанию владельцем файла станет его личная группа, и другие админы не смогут его отредактировать. Чтобы этого не произошло, выполните
-```
+```bash
 sudo chmod g+s /srv/ansible-vlab
 sudo find /srv/ansible-vlab -type d -exec chmod g+s {} +
 ```
 Теперь любые новые файлы внутри этой папки будут автоматически наследоваться группой sudo, и вся команда сможет работать без багов с правами.
 
-Если будет использоваться qemu-guest-agent, то добавить с конфиг ВМ канал:
+# Разное
+
+## Использование qemu-guest-agent
+Если будет использоваться qemu-guest-agent, то добавить в конфиг ВМ канал:
 ```
 <channel type="unix">
     <target type="virtio" name="org.qemu.guest_agent.0"/>
@@ -548,7 +544,7 @@ sudo find /srv/ansible-vlab -type d -exec chmod g+s {} +
 На ВМ установить пакет `qemu-guest-agent` и включить службу `qemu-guest-agent`.
 
 После этих действий можно выполнять команды, например, qemu-agent-command
-```
+```bash
 virsh -c qemu:///system qemu-agent-command "$DOMAIN_NAME" '{"execute":"guest-get-time"}'
 ```
 
@@ -556,7 +552,7 @@ NB! При запуске ВМ с дисками в домашнем катал�
 
 Чтобы при запуске графического интерфейса virt-manager сразу отображалось и автоматически открывалось подключение к пользовательской сессии, нужно настроить параметры virt-manager.
 В Debian 13 настройка выполнена с помощью следующих команд
-```
+```bash
 # Установить команду gsettings
 sudo apt install libglib2.0-bin
 
@@ -569,7 +565,7 @@ gsettings set org.virt-manager.virt-manager.connections autoconnect "['qemu:///s
 ```
 
 Чтобы постоянно не указывать сессию настроить переменную LIBVIRT_DEFAULT_URI
-```
+```bash
 export LIBVIRT_DEFAULT_URI="qemu:///session"
 ```
 
