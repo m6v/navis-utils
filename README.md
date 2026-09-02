@@ -569,3 +569,39 @@ gsettings set org.virt-manager.virt-manager.connections autoconnect "['qemu:///s
 export LIBVIRT_DEFAULT_URI="qemu:///session"
 ```
 
+# Техническое резюме для сборки пропатченного пакета libvirt  в Astra Linux SE
+
+Корень проблемы «Конец файла при чтении данных / Ошибка ввода-вывода (EOF)» в сессии пользователя (qemu:///session) при использовании сетевого подключения типа "Мост" — принудительный сброс сетевых прилегий (Linux Capabilities). Из-за этого эмулятор QEMU теряет право передать дескриптор моста virbr0 в SUID-хелпер.
+
+Тех. поддержка Астры сказала, что при сборке в 1.7 использовалась версия с [https://github.com/libvirt/libvirt/releases/tag/v10.5.0]
+```
+wget https://github.com/libvirt/libvirt/archive/refs/tags/v10.5.0.tar.gz
+```
+
+Было (файл /src/util/virutil.c):
+```
+    for (i = 0; i <= CAP_LAST_CAP; i++) {
+        if (capBits & (1ULL << i)) {
+            capng_update(CAPNG_ADD,
+                         CAPNG_EFFECTIVE|CAPNG_INHERITABLE|
+                         CAPNG_PERMITTED|CAPNG_BOUNDING_SET,
+                         i);
+        }
+    }
+```
+Стало (файл /src/util/virutil.c):
+```
+for (i = 0; i <= CAP_LAST_CAP; i++) {
+        if (capBits & (1ULL << i)) {
+            capng_update(CAPNG_ADD,
+                         CAPNG_EFFECTIVE|CAPNG_INHERITABLE|
+                         CAPNG_PERMITTED|CAPNG_BOUNDING_SET,
+                         i);
+        }
+    }
+
+    /* Принудительно сохранить сетевые права для работы qemu-bridge-helper в сессии пользователя */
+    capng_update(CAPNG_ADD, CAPNG_EFFECTIVE|CAPNG_PERMITTED|CAPNG_INHERITABLE|CAPNG_BOUNDING_SET, CAP_NET_ADMIN);
+```
+
+Порядок компиляции описан в [https://libvirt.org/compiling.html].
